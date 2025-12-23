@@ -27,6 +27,25 @@ class SupplierManager:
             (success, message, supplier_id)
         """
         try:
+            # Vérifier si le fournisseur existe déjà (par nom)
+            check_query = "SELECT id, is_active, code FROM suppliers WHERE company_name = ?"
+            existing = db.fetch_one(check_query, (company_name,))
+            
+            if existing:
+                supplier_id, is_active, existing_code = existing
+                if is_active:
+                    return False, f"Un fournisseur avec ce nom existe déjà (Code: {existing_code})", None
+                else:
+                    # Réactiver le fournisseur
+                    update_query = """
+                        UPDATE suppliers 
+                        SET contact_person = ?, phone = ?, email = ?, address = ?, is_active = 1
+                        WHERE id = ?
+                    """
+                    db.execute_update(update_query, (contact_person, phone, email, address, supplier_id))
+                    logger.info(f"Fournisseur réactivé: {company_name} (Code: {existing_code})")
+                    return True, f"Fournisseur réactivé avec succès (Code: {existing_code})", supplier_id
+
             # Générer un code fournisseur unique
             code = self._generate_supplier_code()
             
@@ -102,8 +121,14 @@ class SupplierManager:
         try:
             # Vérifier s'il a des dettes
             supplier = self.get_supplier(supplier_id)
-            if supplier and supplier['total_debt'] > 0:
-                return False, f"Impossible de supprimer: dette en cours de {supplier['total_debt']} DA"
+            if supplier:
+                try:
+                    total_debt = float(supplier.get('total_debt', 0))
+                except (ValueError, TypeError):
+                    total_debt = 0.0
+                    
+                if total_debt > 0:
+                    return False, f"Impossible de supprimer: dette en cours de {total_debt:.2f} DA"
             
             # Vérifier s'il a des produits associés
             check_query = "SELECT COUNT(*) as count FROM products WHERE supplier_id = ? AND is_active = 1"
@@ -195,14 +220,15 @@ class SupplierManager:
         results = db.execute_query(query)
         return [dict(row) for row in results]
     
-    def add_purchase(self, supplier_id: int, amount: float,
+    def add_purchase(self, supplier_id: int, purchase_amount: float, debt_amount: float,
                     processed_by: int, description: str = "") -> tuple[bool, str]:
         """
-        Enregistrer un achat (augmente la dette)
+        Enregistrer un achat chez un fournisseur
         
         Args:
             supplier_id: ID du fournisseur
-            amount: Montant de l'achat
+            purchase_amount: Montant total de l'achat
+            debt_amount: Montant de la dette à ajouter
             processed_by: ID de l'utilisateur
             description: Description
             
@@ -217,26 +243,28 @@ class SupplierManager:
             db.begin_transaction()
             
             try:
-                # Augmenter la dette
+                # Mettre à jour total_purchases et total_debt
                 update_query = """
                     UPDATE suppliers 
-                    SET total_debt = total_debt + ?
+                    SET total_purchases = total_purchases + ?,
+                        total_debt = total_debt + ?
                     WHERE id = ?
                 """
-                db.execute_update(update_query, (amount, supplier_id))
+                db.execute_update(update_query, (purchase_amount, debt_amount, supplier_id))
                 
-                # Enregistrer la transaction
-                transaction_query = """
-                    INSERT INTO supplier_transactions (
-                        supplier_id, transaction_type, amount, description, processed_by
-                    ) VALUES (?, 'purchase', ?, ?, ?)
-                """
-                db.execute_insert(transaction_query, (supplier_id, amount, description, processed_by))
+                # Enregistrer la transaction d'achat
+                if purchase_amount > 0:
+                    transaction_query = """
+                        INSERT INTO supplier_transactions (
+                            supplier_id, transaction_type, amount, description, processed_by
+                        ) VALUES (?, 'purchase', ?, ?, ?)
+                    """
+                    db.execute_insert(transaction_query, (supplier_id, purchase_amount, description, processed_by))
                 
                 db.commit()
                 
-                logger.info(f"Achat enregistré: Fournisseur {supplier_id} - {amount} DA")
-                return True, f"Achat enregistré: {amount} DA"
+                logger.info(f"Achat enregistré: Fournisseur {supplier_id} - Achat: {purchase_amount} DA, Dette: {debt_amount} DA")
+                return True, f"Achat enregistré: {purchase_amount} DA (Dette ajoutée: {debt_amount} DA)"
                 
             except Exception as e:
                 db.rollback()

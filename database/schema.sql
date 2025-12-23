@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
     
     -- Finances
     total_debt REAL DEFAULT 0.0,  -- Dette totale envers le fournisseur
+    total_purchases REAL DEFAULT 0.0,  -- Total des achats effectués chez ce fournisseur
     
     is_active INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

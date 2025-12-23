@@ -42,12 +42,40 @@ class ProductManager:
             (success, message, product_id)
         """
         try:
+            # Si pas de code-barres, en générer un automatiquement
+            if not barcode or barcode.strip() == '':
+                import random
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                random_suffix = random.randint(100, 999)
+                barcode = f"AUTO-{timestamp}-{random_suffix}"
+            
             # Vérifier si le code-barres existe déjà
-            if barcode:
-                check_query = "SELECT id FROM products WHERE barcode = ?"
-                existing = db.fetch_one(check_query, (barcode,))
-                if existing:
+            check_query = "SELECT id, is_active FROM products WHERE barcode = ?"
+            existing = db.fetch_one(check_query, (barcode,))
+            
+            if existing:
+                product_id, is_active = existing
+                if is_active:
                     return False, "Ce code-barres existe déjà", None
+                else:
+                    # Réactiver le produit
+                    update_query = """
+                        UPDATE products 
+                        SET name = ?, name_ar = ?, description = ?, category_id = ?,
+                            purchase_price = ?, selling_price = ?, stock_quantity = ?, min_stock_level = ?,
+                            unit = ?, expiry_date = ?, manufacturing_date = ?, supplier_id = ?, is_active = 1,
+                            created_by = ?
+                        WHERE id = ?
+                    """
+                    db.execute_update(update_query, (
+                        name, name_ar, description, category_id,
+                        purchase_price, selling_price, stock_quantity, min_stock_level,
+                        unit, expiry_date, manufacturing_date, supplier_id, created_by,
+                        product_id
+                    ))
+                    
+                    logger.info(f"Produit réactivé: {name} (ID: {product_id})")
+                    return True, "Produit réactivé avec succès", product_id
             
             # Insérer le produit
             insert_query = """
@@ -503,6 +531,103 @@ class ProductManager:
         stats['promoted_count'] = len(self.get_promoted_products())
         
         return stats
+
+
+    def import_products_from_excel(self, file_path: str, created_by: int) -> tuple[bool, Dict]:
+        """
+        Importer des produits depuis un fichier Excel
+        
+        Args:
+            file_path: Chemin du fichier Excel
+            created_by: ID de l'utilisateur
+            
+        Returns:
+            (success, stats)
+        """
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(file_path)
+            ws = wb.active
+            
+            stats = {
+                'total': 0,
+                'success': 0,
+                'errors': 0,
+                'duplicates': 0,
+                'error_details': []
+            }
+            
+            # En-têtes attendues (flexibles)
+            # colonnes: code, nom, prix_achat, prix_vente, stock, min_stock
+            
+            headers = [cell.value for cell in ws[1]]
+            
+            # Mapping basique des colonnes
+            col_map = {}
+            for i, h in enumerate(headers):
+                if not h: continue
+                h = str(h).lower().strip()
+                if 'code' in h or 'barcode' in h: col_map['barcode'] = i
+                elif 'nom' in h or 'product' in h: col_map['name'] = i
+                elif 'achat' in h or 'purchase' in h: col_map['purchase'] = i
+                elif 'vente' in h or 'price' in h or 'selling' in h: col_map['selling'] = i
+                elif 'stock' in h and 'min' not in h: col_map['stock'] = i
+                elif 'min' in h: col_map['min'] = i
+            
+            if 'name' not in col_map or 'selling' not in col_map:
+                return False, {'error': "Colonnes requises manquantes: 'Nom' et 'Prix Vente'"}
+                
+            db.begin_transaction()
+            
+            try:
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                    if not row[col_map['name']]: continue # Ignorer lignes vides
+                    
+                    stats['total'] += 1
+                    
+                    try:
+                        name = str(row[col_map['name']])
+                        selling_price = float(row[col_map['selling']])
+                        
+                        barcode = str(row[col_map['barcode']]) if 'barcode' in col_map and row[col_map['barcode']] else None
+                        purchase_price = float(row[col_map['purchase']]) if 'purchase' in col_map and row[col_map['purchase']] else 0.0
+                        stock = int(row[col_map['stock']]) if 'stock' in col_map and row[col_map['stock']] else 0
+                        min_stock = int(row[col_map['min']]) if 'min' in col_map and row[col_map['min']] else 10
+                        
+                        # Créer le produit
+                        success, msg, _ = self.create_product(
+                            name=name,
+                            selling_price=selling_price,
+                            purchase_price=purchase_price,
+                            barcode=barcode,
+                            stock_quantity=stock,
+                            min_stock_level=min_stock,
+                            created_by=created_by
+                        )
+                        
+                        if success:
+                            stats['success'] += 1
+                        else:
+                            if "existe déjà" in msg:
+                                stats['duplicates'] += 1
+                            else:
+                                stats['errors'] += 1
+                                stats['error_details'].append(f"Ligne {row_idx}: {msg}")
+                                
+                    except Exception as e:
+                        stats['errors'] += 1
+                        stats['error_details'].append(f"Ligne {row_idx}: {str(e)}")
+                
+                db.commit()
+                return True, stats
+                
+            except Exception as e:
+                db.rollback()
+                raise e
+                
+        except Exception as e:
+            logger.error(f"Erreur import Excel: {e}")
+            return False, {'error': str(e)}
 
 
 # Instance globale

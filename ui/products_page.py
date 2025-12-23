@@ -151,39 +151,135 @@ class ProductsPage(QWidget):
         
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setSpacing(15)
         
-        # Barre d'outils
+        # En-tête
+        header = QLabel("📦 Gestion des Produits")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
+        layout.addWidget(header)
+        
+        # Barre d'outils - Améliorée
         toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
         
-        # Recherche
+        # Recherche - Plus grande
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Rechercher (Nom, Code-barres)...")
+        self.search_input.setMinimumHeight(50)
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 15px;
+                background-color: white;
+            }
+            QLineEdit:focus {
+                border-color: #3498db;
+            }
+        """)
         self.search_input.textChanged.connect(self.load_products)
         toolbar.addWidget(self.search_input)
         
-        # Filtres
+        # Filtres - Plus grand
         self.filter_combo = QComboBox()
+        self.filter_combo.setMinimumHeight(50)
+        self.filter_combo.setMinimumWidth(180)
         self.filter_combo.addItems(["Tous les produits", "Stock faible", "En promotion", "Expire bientôt"])
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 14px;
+                background-color: white;
+            }
+        """)
         self.filter_combo.currentIndexChanged.connect(self.load_products)
         toolbar.addWidget(self.filter_combo)
         
-        # Bouton Nouveau
+        # Bouton Nouveau - Plus grand
         new_btn = QPushButton("➕ Nouveau Produit")
-        new_btn.setStyleSheet("background-color: #3498db; color: white;")
+        new_btn.setMinimumHeight(50)
+        new_btn.setCursor(Qt.PointingHandCursor)
+        new_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
         new_btn.clicked.connect(self.open_new_product_dialog)
         toolbar.addWidget(new_btn)
         
+        # Bouton Importer - Plus grand
+        import_btn = QPushButton("📥 Importer")
+        import_btn.setMinimumHeight(50)
+        import_btn.setCursor(Qt.PointingHandCursor)
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #8e44ad;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7d3c98;
+            }
+        """)
+        import_btn.clicked.connect(self.open_import_dialog)
+        toolbar.addWidget(import_btn)
+        
         layout.addLayout(toolbar)
         
-        # Tableau
+        # Tableau - Style amélioré
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(["Code", "Nom", "Prix Vente", "Stock", "Expiration", "Promotion", "Actions"])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Fixed
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                background-color: white;
+                gridline-color: #f0f0f0;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 10px;
+            }
+            QTableWidget::item:selected {
+                background-color: #3498db;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 12px;
+                border: none;
+                font-weight: bold;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+            QTableWidget::item:alternate {
+                background-color: #f8f9fa;
+            }
+        """)
         layout.addWidget(self.table)
         
         self.setLayout(layout)
@@ -242,13 +338,26 @@ class ProductsPage(QWidget):
             del_btn.setStyleSheet("color: red;")
             del_btn.clicked.connect(lambda checked, x=p['id']: self.delete_product(x))
             
+            # Bouton imprimer code-barres
+            print_btn = QPushButton("🏷️")
+            print_btn.setFixedSize(30, 30)
+            print_btn.setToolTip("Imprimer le code-barres")
+            print_btn.clicked.connect(lambda checked, x=p: self.print_barcode(x))
+            
             action_layout.addWidget(edit_btn)
             action_layout.addWidget(del_btn)
+            action_layout.addWidget(print_btn)
             self.table.setCellWidget(row, 6, action_widget)
             
     def open_new_product_dialog(self):
         dialog = ProductFormDialog(parent=self)
         if dialog.exec_():
+            self.load_products()
+            
+    def open_import_dialog(self):
+        """Ouvrir le dialogue d'importation"""
+        from ui.import_dialog import ImportDialog
+        if ImportDialog(parent=self).exec_():
             self.load_products()
             
     def open_edit_dialog(self, product):
@@ -261,6 +370,72 @@ class ProductsPage(QWidget):
         if confirm == QMessageBox.Yes:
             product_manager.delete_product(product_id)
             self.load_products()
+
+    def print_barcode(self, product):
+        """Imprimer le code-barres d'un produit"""
+        try:
+            from reportlab.lib.pagesizes import mm
+            from reportlab.pdfgen import canvas
+            from reportlab.graphics.barcode import code128
+            from reportlab.lib.units import mm
+            import os
+            import subprocess
+            
+            barcode_value = product.get('barcode', '')
+            product_name = product.get('name', 'Produit')
+            price = product.get('selling_price', 0)
+            
+            if not barcode_value:
+                QMessageBox.warning(self, "Erreur", "Ce produit n'a pas de code-barres")
+                return
+            
+            # Créer le dossier si nécessaire
+            import config
+            barcode_dir = config.DATA_DIR / "barcodes"
+            barcode_dir.mkdir(exist_ok=True)
+            
+            # Générer le PDF
+            filename = barcode_dir / f"barcode_{barcode_value}.pdf"
+            
+            # Taille étiquette: 50mm x 30mm
+            width = 60 * mm
+            height = 35 * mm
+            
+            c = canvas.Canvas(str(filename), pagesize=(width, height))
+            
+            # Nom du produit (tronqué si trop long)
+            c.setFont("Helvetica-Bold", 8)
+            name_display = product_name[:25] + "..." if len(product_name) > 25 else product_name
+            c.drawCentredString(width/2, height - 8*mm, name_display)
+            
+            # Code-barres
+            barcode = code128.Code128(barcode_value, barWidth=0.4*mm, barHeight=12*mm)
+            barcode.drawOn(c, 5*mm, 10*mm)
+            
+            # Texte code-barres
+            c.setFont("Helvetica", 6)
+            c.drawCentredString(width/2, 6*mm, barcode_value)
+            
+            # Prix
+            c.setFont("Helvetica-Bold", 10)
+            c.drawCentredString(width/2, 2*mm, f"{price} DA")
+            
+            c.save()
+            
+            # Ouvrir le PDF
+            if os.name == 'nt':
+                os.startfile(str(filename))
+            else:
+                subprocess.run(['xdg-open', str(filename)])
+                
+            logger.info(f"Code-barres généré: {filename}")
+            
+        except ImportError:
+            QMessageBox.warning(self, "Module manquant", 
+                "Le module 'reportlab' est requis pour l'impression des codes-barres.\n\nInstallez-le avec: pip install reportlab")
+        except Exception as e:
+            logger.error(f"Erreur génération code-barres: {e}")
+            QMessageBox.critical(self, "Erreur", f"Impossible de générer le code-barres: {e}")
 
     def show_context_menu(self, pos):
         menu = QMenu(self)
@@ -276,6 +451,119 @@ class ProductsPage(QWidget):
         # Let's fix this in load_products by storing ID in UserRole.
         pass # To be implemented if requested, simpler actions button covers it.
 
+    def set_dark_mode(self, is_dark):
+        """Appliquer le mode sombre à la page Produits"""
+        if is_dark:
+            # Mode sombre
+            self.table.setStyleSheet("""
+                QTableWidget {
+                    border: 2px solid #555;
+                    border-radius: 10px;
+                    background-color: #34495e;
+                    gridline-color: #555;
+                    font-size: 14px;
+                    color: white;
+                }
+                QTableWidget::item {
+                    padding: 10px;
+                    color: white;
+                }
+                QTableWidget::item:selected {
+                    background-color: #3498db;
+                    color: white;
+                }
+                QHeaderView::section {
+                    background-color: #2c3e50;
+                    padding: 12px;
+                    border: none;
+                    font-weight: bold;
+                    font-size: 14px;
+                    color: white;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #3d566e;
+                }
+            """)
+            
+            self.search_input.setStyleSheet("""
+                QLineEdit {
+                    border: 2px solid #555;
+                    border-radius: 10px;
+                    padding: 10px 15px;
+                    font-size: 15px;
+                    background-color: #34495e;
+                    color: white;
+                }
+                QLineEdit:focus {
+                    border-color: #3498db;
+                }
+            """)
+            
+            self.filter_combo.setStyleSheet("""
+                QComboBox {
+                    border: 2px solid #555;
+                    border-radius: 10px;
+                    padding: 10px 15px;
+                    font-size: 14px;
+                    background-color: #34495e;
+                    color: white;
+                }
+            """)
+        else:
+            # Mode clair
+            self.table.setStyleSheet("""
+                QTableWidget {
+                    border: 2px solid #e0e0e0;
+                    border-radius: 10px;
+                    background-color: white;
+                    gridline-color: #f0f0f0;
+                    font-size: 14px;
+                }
+                QTableWidget::item {
+                    padding: 10px;
+                }
+                QTableWidget::item:selected {
+                    background-color: #3498db;
+                    color: white;
+                }
+                QHeaderView::section {
+                    background-color: #f8f9fa;
+                    padding: 12px;
+                    border: none;
+                    font-weight: bold;
+                    font-size: 14px;
+                    color: #2c3e50;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #f8f9fa;
+                }
+            """)
+            
+            self.search_input.setStyleSheet("""
+                QLineEdit {
+                    border: 2px solid #e0e0e0;
+                    border-radius: 10px;
+                    padding: 10px 15px;
+                    font-size: 15px;
+                    background-color: white;
+                    color: #333;
+                }
+                QLineEdit:focus {
+                    border-color: #3498db;
+                }
+            """)
+            
+            self.filter_combo.setStyleSheet("""
+                QComboBox {
+                    border: 2px solid #e0e0e0;
+                    border-radius: 10px;
+                    padding: 10px 15px;
+                    font-size: 14px;
+                    background-color: white;
+                }
+            """)
+
     def refresh(self):
         """Rafraîchir les données"""
         self.load_products()
+

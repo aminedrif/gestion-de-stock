@@ -73,6 +73,66 @@ def main():
             main_window = MainWindow(user_data)
             main_window.showMaximized()
             
+            # Configurer la sauvegarde automatique toutes les heures
+            from PyQt5.QtCore import QTimer
+            from core.backup import backup_manager
+            
+            def perform_auto_backup():
+                """Effectuer une sauvegarde automatique"""
+                try:
+                    # Sauvegarde SQL (base de données)
+                    backup_manager.auto_backup()
+                    
+                    # Sauvegarde Excel
+                    import openpyxl
+                    from datetime import datetime
+                    backup_dir = config.BACKUP_DIR
+                    backup_dir.mkdir(exist_ok=True)
+                    
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    excel_path = backup_dir / f"auto_backup_{timestamp}.xlsx"
+                    
+                    wb = openpyxl.Workbook()
+                    
+                    # Produits
+                    ws = wb.active
+                    ws.title = "Produits"
+                    products = db.execute_query("SELECT * FROM products WHERE is_active = 1")
+                    if products:
+                        ws.append(list(dict(products[0]).keys()))
+                        for p in products:
+                            ws.append(list(dict(p).values()))
+                    
+                    # Ventes
+                    ws_sales = wb.create_sheet("Ventes")
+                    sales = db.execute_query("SELECT * FROM sales")
+                    if sales:
+                        ws_sales.append(list(dict(sales[0]).keys()))
+                        for s in sales:
+                            ws_sales.append(list(dict(s).values()))
+                    
+                    # Clients
+                    ws_cust = wb.create_sheet("Clients")
+                    customers = db.execute_query("SELECT * FROM customers WHERE is_active = 1")
+                    if customers:
+                        ws_cust.append(list(dict(customers[0]).keys()))
+                        for c in customers:
+                            ws_cust.append(list(dict(c).values()))
+                    
+                    wb.save(excel_path)
+                    logger.info(f"Sauvegarde automatique créée: {excel_path.name}")
+                    
+                except Exception as e:
+                    logger.error(f"Erreur sauvegarde automatique: {e}")
+            
+            # Timer pour backup toutes les heures (3600000 ms)
+            backup_timer = QTimer()
+            backup_timer.timeout.connect(perform_auto_backup)
+            backup_timer.start(3600000)  # 1 heure en millisecondes
+            
+            # Faire une première sauvegarde au démarrage
+            perform_auto_backup()
+            
             # Lancer la boucle d'événements
             sys.exit(app.exec_())
         else:

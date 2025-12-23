@@ -14,7 +14,7 @@ password_hash = hash_password("admin123")
 print(f"Hash pour 'admin123': {password_hash}")
 
 # Mettre à jour l'utilisateur admin
-db.execute_query("""
+db.execute_update("""
     UPDATE users 
     SET password_hash = ?
     WHERE username = 'admin'
@@ -22,3 +22,4 @@ db.execute_query("""
 
 print("✓ Mot de passe admin mis à jour avec succès!")
 print("Vous pouvez maintenant vous connecter avec: admin / admin123")
+

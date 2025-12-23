@@ -95,21 +95,50 @@ class MainWindow(QMainWindow):
         sidebar.setStyleSheet(self.sidebar_style)
         
         layout = QVBoxLayout()
-        layout.setSpacing(8)
-        layout.setContentsMargins(0, 25, 0, 25)
+        layout.setSpacing(12)
+        layout.setContentsMargins(0, 30, 0, 30)
         
-        # Logo/Titre
+        # Logo/Titre - Plus grand
         logo_label = QLabel("🏪")
         logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setStyleSheet("font-size: 50px; background: transparent; border: none;")
+        logo_label.setStyleSheet("font-size: 64px; background: transparent; border: none;")
         layout.addWidget(logo_label)
         
-        title_label = QLabel("Mini-Market")
+        title_label = QLabel("AKHRIB Supérette")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: white; font-size: 20px; font-weight: bold; padding: 5px; background: transparent; border: none;")
+        title_label.setStyleSheet("color: white; font-size: 22px; font-weight: bold; padding: 8px; background: transparent; border: none;")
         layout.addWidget(title_label)
         
-        layout.addSpacing(20)
+        # Bouton Thème (Mode Sombre/Clair) - Plus visible
+        self.theme_btn = QPushButton("🌙  Mode Sombre")
+        self.theme_btn.setCheckable(True)
+        self.theme_btn.setCursor(Qt.PointingHandCursor)
+        self.theme_btn.setMinimumHeight(40)
+        self.theme_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.15);
+                color: white;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                border-radius: 20px;
+                padding: 8px 20px;
+                margin: 5px 30px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.25);
+                border-color: rgba(255, 255, 255, 0.5);
+            }
+            QPushButton:checked {
+                background-color: #f1c40f;
+                color: #2c3e50;
+                border: none;
+            }
+        """)
+        self.theme_btn.clicked.connect(self.toggle_theme_sidebar)
+        layout.addWidget(self.theme_btn)
+        
+        layout.addSpacing(25)
         
         # Boutons de menu
         self.menu_buttons = {}
@@ -142,10 +171,10 @@ class MainWindow(QMainWindow):
             layout.addWidget(btn_reports)
             self.menu_buttons['reports'] = btn_reports
         
-        if auth_manager.is_admin():
-            btn_settings = self.create_menu_button("⚙️  Paramètres (F10)", "settings")
-            layout.addWidget(btn_settings)
-            self.menu_buttons['settings'] = btn_settings
+        # Accessible à tous (le contenu sera filtré dans la page)
+        btn_settings = self.create_menu_button("⚙️  Paramètres (F10)", "settings")
+        layout.addWidget(btn_settings)
+        self.menu_buttons['settings'] = btn_settings
         
         layout.addStretch()
         
@@ -171,27 +200,29 @@ class MainWindow(QMainWindow):
         return sidebar
     
     def create_menu_button(self, text, page_name):
-        """Créer un bouton de menu"""
+        """Créer un bouton de menu avec design moderne"""
         button = QPushButton(text)
         button.setCheckable(True)
-        button.setMinimumHeight(45)
+        button.setMinimumHeight(55)
         button.setCursor(Qt.PointingHandCursor)
         button.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 color: white;
                 border: none;
-                border-left: 4px solid transparent;
-                padding-left: 20px;
+                border-left: 5px solid transparent;
+                padding-left: 25px;
                 text-align: left;
-                font-size: 14px;
+                font-size: 16px;
+                font-weight: 500;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: rgba(255, 255, 255, 0.15);
+                border-left: 5px solid rgba(255, 255, 255, 0.5);
             }
             QPushButton:checked {
-                background-color: rgba(255, 255, 255, 0.2);
-                border-left: 4px solid white;
+                background-color: rgba(255, 255, 255, 0.25);
+                border-left: 5px solid #3498db;
                 font-weight: bold;
             }
         """)
@@ -311,67 +342,140 @@ class MainWindow(QMainWindow):
         self.clock_label.setText(current_time.toString("dddd dd MMMM yyyy - HH:mm:ss"))
     
     def apply_theme(self):
-        """Appliquer le thème actuel"""
+        """Appliquer le thème actuel à TOUTES les pages via QPalette"""
         app = QApplication.instance()
         
         if self.is_dark_mode:
-            # Thème sombre
+            # Thème sombre - via QPalette (affecte TOUS les widgets)
             app.setStyle("Fusion")
             palette = QPalette()
-            palette.setColor(QPalette.Window, QColor(53, 53, 53))
-            palette.setColor(QPalette.WindowText, Qt.white)
-            palette.setColor(QPalette.Base, QColor(25, 25, 25))
-            palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
-            palette.setColor(QPalette.ToolTipBase, Qt.white)
-            palette.setColor(QPalette.ToolTipText, Qt.white)
-            palette.setColor(QPalette.Text, Qt.white)
-            palette.setColor(QPalette.Button, QColor(53, 53, 53))
-            palette.setColor(QPalette.ButtonText, Qt.white)
+            
+            # Couleurs de base sombres
+            dark_bg = QColor(44, 62, 80)  # #2c3e50
+            dark_alt = QColor(52, 73, 94)  # #34495e
+            dark_text = QColor(236, 240, 241)  # #ecf0f1
+            accent = QColor(52, 152, 219)  # #3498db
+            
+            palette.setColor(QPalette.Window, dark_bg)
+            palette.setColor(QPalette.WindowText, dark_text)
+            palette.setColor(QPalette.Base, dark_alt)
+            palette.setColor(QPalette.AlternateBase, dark_bg)
+            palette.setColor(QPalette.ToolTipBase, dark_text)
+            palette.setColor(QPalette.ToolTipText, dark_bg)
+            palette.setColor(QPalette.Text, dark_text)
+            palette.setColor(QPalette.Button, dark_alt)
+            palette.setColor(QPalette.ButtonText, dark_text)
             palette.setColor(QPalette.BrightText, Qt.red)
-            palette.setColor(QPalette.Link, QColor(42, 130, 218))
-            palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
-            palette.setColor(QPalette.HighlightedText, Qt.black)
+            palette.setColor(QPalette.Link, accent)
+            palette.setColor(QPalette.Highlight, accent)
+            palette.setColor(QPalette.HighlightedText, Qt.white)
+            
+            # Couleurs désactivées
+            palette.setColor(QPalette.Disabled, QPalette.WindowText, QColor(127, 127, 127))
+            palette.setColor(QPalette.Disabled, QPalette.Text, QColor(127, 127, 127))
+            palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(127, 127, 127))
+            
             app.setPalette(palette)
             
-            # Styles spécifiques sombres
-            self.content_area.setStyleSheet("background-color: #2c3e50;")
+            # Style minimal pour content_area - laisser QPalette faire le travail
+            self.content_area.setStyleSheet("")
             
-            # Mettre à jour la POS Page si nécessaire
-            if hasattr(self.pos_page, 'set_dark_mode'):
-                self.pos_page.set_dark_mode(True)
+            # Sidebar en mode sombre
+            self.sidebar.setStyleSheet("""
+                QWidget {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a252f, stop:1 #2c3e50);
+                }
+            """)
                 
         else:
             # Thème clair (défaut)
             app.setStyle("Fusion")
-            palette = QPalette() # Reset
+            palette = QPalette()
             
-            # Reset aux couleurs standard (claires)
-            palette.setColor(QPalette.Window, QColor(240, 240, 240))
-            palette.setColor(QPalette.WindowText, Qt.black)
-            palette.setColor(QPalette.Base, Qt.white)
-            palette.setColor(QPalette.AlternateBase, QColor(233, 231, 227))
-            palette.setColor(QPalette.ToolTipBase, Qt.black)
-            palette.setColor(QPalette.ToolTipText, Qt.white)
-            palette.setColor(QPalette.Text, Qt.black)
-            palette.setColor(QPalette.Button, QColor(240, 240, 240))
-            palette.setColor(QPalette.ButtonText, Qt.black)
+            # Couleurs de base claires
+            light_bg = QColor(245, 245, 245)  # #f5f5f5
+            light_base = QColor(255, 255, 255)  # white
+            light_alt = QColor(248, 249, 250)  # #f8f9fa
+            dark_text = QColor(44, 62, 80)  # #2c3e50
+            accent = QColor(52, 152, 219)  # #3498db
+            
+            palette.setColor(QPalette.Window, light_bg)
+            palette.setColor(QPalette.WindowText, dark_text)
+            palette.setColor(QPalette.Base, light_base)
+            palette.setColor(QPalette.AlternateBase, light_alt)
+            palette.setColor(QPalette.ToolTipBase, dark_text)
+            palette.setColor(QPalette.ToolTipText, light_base)
+            palette.setColor(QPalette.Text, dark_text)
+            palette.setColor(QPalette.Button, light_bg)
+            palette.setColor(QPalette.ButtonText, dark_text)
             palette.setColor(QPalette.BrightText, Qt.red)
-            palette.setColor(QPalette.Link, QColor(42, 130, 218))
-            palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.Link, accent)
+            palette.setColor(QPalette.Highlight, accent)
             palette.setColor(QPalette.HighlightedText, Qt.white)
+            
             app.setPalette(palette)
             
-            # Styles spécifiques clairs
-            self.content_area.setStyleSheet("background-color: #f5f5f5;")
+            # Réinitialiser le style
+            self.content_area.setStyleSheet("")
             
-            # Mettre à jour la POS Page
-            if hasattr(self.pos_page, 'set_dark_mode'):
-                self.pos_page.set_dark_mode(False)
+            # Sidebar en mode clair
+            self.sidebar.setStyleSheet("""
+                QWidget {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2c3e50, stop:1 #34495e);
+                }
+            """)
+
+        # Mettre à jour le bouton
+        if hasattr(self, 'theme_btn'):
+            if self.is_dark_mode:
+                self.theme_btn.setText("☀️  Mode Clair")
+                self.theme_btn.setChecked(True)
+            else:
+                self.theme_btn.setText("🌙  Mode Sombre")
+                self.theme_btn.setChecked(False)
+        
+        # Forcer la mise à jour de tous les widgets enfants
+        self.update_all_widgets(self.content_area)
+        
+        # Appeler set_dark_mode sur les pages qui l'implémentent
+        for page_name in ['pos_page', 'products_page', 'customers_page', 'suppliers_page', 'reports_page', 'home_page', 'settings_page']:
+            page = getattr(self, page_name, None)
+            if page and hasattr(page, 'set_dark_mode'):
+                page.set_dark_mode(self.is_dark_mode)
+    
+    def update_all_widgets(self, parent_widget):
+        """Mettre à jour récursivement tous les widgets pour appliquer le thème"""
+        import re
+        for child in parent_widget.findChildren(QWidget):
+            current_style = child.styleSheet()
+            if current_style:
+                # Pattern pour détecter les backgrounds blancs (tous les formats)
+                white_bg_pattern = re.compile(
+                    r'background(?:-color)?\s*:\s*(white|#fff(?:fff)?|#ffffff)\s*;',
+                    re.IGNORECASE
+                )
+                
+                if white_bg_pattern.search(current_style):
+                    if self.is_dark_mode:
+                        # Remplacer par couleur sombre
+                        new_style = white_bg_pattern.sub('background-color: #34495e;', current_style)
+                    else:
+                        # Garder blanc en mode clair
+                        new_style = current_style
+                    child.setStyleSheet(new_style)
+            
+            # Forcer la mise à jour visuelle
+            child.update()
+            child.repaint()
             
     def set_theme(self, is_dark):
         """Slot pour changer le thème"""
         self.is_dark_mode = is_dark
         self.apply_theme()
+        
+    def toggle_theme_sidebar(self):
+        """Basculer le thème depuis la sidebar"""
+        self.set_theme(self.theme_btn.isChecked())
         
     def logout(self):
         reply = QMessageBox.question(self, "Déconnexion", "Se déconnecter ?", QMessageBox.Yes | QMessageBox.No)

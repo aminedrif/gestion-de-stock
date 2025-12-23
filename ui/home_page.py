@@ -124,19 +124,9 @@ class HomePage(QWidget):
         
         layout.addLayout(buttons_layout)
         
-        # Section calculatrice et infos
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(20)
-        
-        # Calculatrice
-        calc_container = self.create_calculator()
-        content_layout.addWidget(calc_container)
-        
-        # Statistiques rapides
-        stats_container = self.create_stats_widget()
-        content_layout.addWidget(stats_container)
-        
-        layout.addLayout(content_layout)
+        # Section Achat Rapide (remplace calculatrice + mini-caisse)
+        quick_purchase = self.create_quick_purchase()
+        layout.addWidget(quick_purchase)
         
         layout.addStretch()
         self.setLayout(layout)
@@ -148,29 +138,120 @@ class HomePage(QWidget):
             self.quick_scan.emit(code)
             self.scan_input.clear()
     
+    def create_quick_purchase(self):
+        """Créer le widget Achat Rapide"""
+        container = QFrame()
+        container.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #667eea, stop:1 #764ba2);
+                border-radius: 15px;
+                border: none;
+            }
+        """)
+        container.setMinimumHeight(200)
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 25, 30, 25)
+        
+        # En-tête
+        header_layout = QHBoxLayout()
+        
+        title = QLabel("⚡ Achat Rapide")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent; border: none;")
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        # Icône
+        icon_label = QLabel("🛒")
+        icon_label.setStyleSheet("font-size: 36px; background: transparent; border: none;")
+        header_layout.addWidget(icon_label)
+        
+        layout.addLayout(header_layout)
+        
+        # Description
+        desc = QLabel("Scannez un produit ou accédez directement à la caisse pour effectuer une vente rapide")
+        desc.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent; border: none;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+        
+        # Boutons côte à côte
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(15)
+        
+        # Bouton Ouvrir Caisse
+        open_btn = QPushButton("🛒 Ouvrir la Caisse")
+        open_btn.setMinimumHeight(60)
+        open_btn.setCursor(Qt.PointingHandCursor)
+        open_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #667eea;
+                border: none;
+                border-radius: 12px;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 15px 25px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        open_btn.clicked.connect(lambda: self.navigate_to.emit("pos"))
+        buttons_layout.addWidget(open_btn)
+        
+        # Bouton Nouvelle Vente
+        new_sale_btn = QPushButton("➕ Nouvelle Vente")
+        new_sale_btn.setMinimumHeight(60)
+        new_sale_btn.setCursor(Qt.PointingHandCursor)
+        new_sale_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255,255,255,0.2);
+                color: white;
+                border: 2px solid white;
+                border-radius: 12px;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 15px 25px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255,255,255,0.3);
+            }
+        """)
+        new_sale_btn.clicked.connect(lambda: self.navigate_to.emit("pos"))
+        buttons_layout.addWidget(new_sale_btn)
+        
+        layout.addLayout(buttons_layout)
+        
+        container.setLayout(layout)
+        return container
+    
+    
     def create_quick_button(self, icon, title, subtitle, color, page_target):
-        """Créer un bouton d'accès rapide"""
+        """Créer un bouton d'accès rapide - Design amélioré"""
         button = QPushButton()
-        button.setMinimumSize(200, 100)
+        button.setMinimumSize(220, 120)
         button.setCursor(Qt.PointingHandCursor)
         
         # Layout du bouton
         btn_layout = QVBoxLayout()
         btn_layout.setAlignment(Qt.AlignCenter)
-        btn_layout.setSpacing(5)
+        btn_layout.setSpacing(8)
         
         icon_label = QLabel(icon)
-        icon_label.setStyleSheet("font-size: 36px; background: transparent; border: none;")
+        icon_label.setStyleSheet("font-size: 48px; background: transparent; border: none;")
         icon_label.setAlignment(Qt.AlignCenter)
         btn_layout.addWidget(icon_label)
         
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 14px; font-weight: bold; background: transparent; color: white; border: none;")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; background: transparent; color: white; border: none;")
         title_label.setAlignment(Qt.AlignCenter)
         btn_layout.addWidget(title_label)
         
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet("font-size: 11px; background: transparent; color: rgba(255,255,255,0.8); border: none;")
+        subtitle_label.setStyleSheet("font-size: 12px; background: transparent; color: rgba(255,255,255,0.9); border: none;")
         subtitle_label.setAlignment(Qt.AlignCenter)
         btn_layout.addWidget(subtitle_label)
         
@@ -179,213 +260,89 @@ class HomePage(QWidget):
             QPushButton {{
                 background-color: {color};
                 border: none;
-                border-radius: 12px;
-                padding: 10px;
+                border-radius: 15px;
+                padding: 15px;
             }}
             QPushButton:hover {{
                 background-color: {color}dd;
+                transform: scale(1.02);
+            }}
+            QPushButton:pressed {{
+                background-color: {color}bb;
             }}
         """)
         
         button.clicked.connect(lambda: self.navigate_to.emit(page_target))
         return button
     
-    def create_calculator(self):
-        """Créer la calculatrice"""
-        container = QFrame()
-        container.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 12px;
-                border: 2px solid #e0e0e0;
-            }
-        """)
-        # Calculatrice plus grande
-        container.setMinimumWidth(400)
-        container.setMinimumHeight(500)
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(10)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Titre
-        title = QLabel("🔢 Calculatrice")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #333; background: transparent; border: none;")
-        layout.addWidget(title)
-        
-        # Écran
-        self.calc_display = QLineEdit()
-        self.calc_display.setReadOnly(True)
-        self.calc_display.setAlignment(Qt.AlignRight)
-        self.calc_display.setText("0")
-        self.calc_display.setMinimumHeight(80)
-        self.calc_display.setStyleSheet("""
-            QLineEdit {
-                background-color: #f5f5f5;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 10px 15px;
-                font-size: 32px;
-                font-weight: bold;
-                color: #333;
-            }
-        """)
-        layout.addWidget(self.calc_display)
-        
-        # Boutons
-        buttons_layout = QGridLayout()
-        buttons_layout.setSpacing(10)
-        
-        buttons = [
-            ('7', 0, 0), ('8', 0, 1), ('9', 0, 2), ('÷', 0, 3),
-            ('4', 1, 0), ('5', 1, 1), ('6', 1, 2), ('×', 1, 3),
-            ('1', 2, 0), ('2', 2, 1), ('3', 2, 2), ('-', 2, 3),
-            ('C', 3, 0), ('0', 3, 1), ('=', 3, 2), ('+', 3, 3),
-        ]
-        
-        for text, row, col in buttons:
-            btn = QPushButton(text)
-            btn.setMinimumSize(80, 70)  # Boutons plus grands
-            btn.setCursor(Qt.PointingHandCursor)
-            
-            if text in ['=', 'C']:
-                color = '#667eea'
-            elif text in ['+', '-', '×', '÷']:
-                color = '#3498db'
-            else:
-                color = '#ecf0f1'
-            
-            text_color = 'white' if text in ['=', 'C', '+', '-', '×', '÷'] else '#333'
-            
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    color: {text_color};
-                    border: none;
-                    border-radius: 12px;
-                    font-size: 24px;
+    def set_dark_mode(self, is_dark):
+        """Appliquer le mode sombre/clair"""
+        if is_dark:
+            # Mode sombre
+            group_style = """
+                QGroupBox {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    border: 1px solid #4a6785;
+                    border-radius: 10px;
+                    padding: 15px;
                     font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {color}dd;
-                }}
-            """)
-            
-            btn.clicked.connect(lambda checked, t=text: self.calc_button_clicked(t))
-            buttons_layout.addWidget(btn, row, col)
-        
-        layout.addLayout(buttons_layout)
-        container.setLayout(layout)
-        
-        # Variables calculatrice
-        self.calc_current = "0"
-        self.calc_operator = None
-        self.calc_operand = None
-        
-        return container
-    
-    def calc_button_clicked(self, text):
-        """Gérer les clics sur la calculatrice"""
-        if text == 'C':
-            self.calc_current = "0"
-            self.calc_operator = None
-            self.calc_operand = None
-        elif text in ['+', '-', '×', '÷']:
-            if self.calc_operand is not None and self.calc_operator is not None:
-                self.calculate()
-            self.calc_operand = float(self.calc_current)
-            self.calc_operator = text
-            self.calc_current = "0"
-        elif text == '=':
-            self.calculate()
+                    font-size: 14px;
+                }
+                QGroupBox::title {
+                    color: #ecf0f1;
+                }
+            """
+            input_style = """
+                QLineEdit {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    border: 2px solid #4a6785;
+                    border-radius: 8px;
+                    padding: 12px;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border-color: #3498db;
+                }
+            """
         else:
-            if self.calc_current == "0":
-                self.calc_current = text
-            else:
-                self.calc_current += text
+            # Mode clair
+            group_style = """
+                QGroupBox {
+                    background-color: white;
+                    color: #2c3e50;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 10px;
+                    padding: 15px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QGroupBox::title {
+                    color: #2c3e50;
+                }
+            """
+            input_style = """
+                QLineEdit {
+                    background-color: white;
+                    color: #2c3e50;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    padding: 12px;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border-color: #3498db;
+                }
+            """
         
-        self.calc_display.setText(self.calc_current)
-    
-    def calculate(self):
-        """Effectuer le calcul"""
-        if self.calc_operator and self.calc_operand is not None:
-            current_val = float(self.calc_current)
-            try:
-                if self.calc_operator == '+':
-                    result = self.calc_operand + current_val
-                elif self.calc_operator == '-':
-                    result = self.calc_operand - current_val
-                elif self.calc_operator == '×':
-                    result = self.calc_operand * current_val
-                elif self.calc_operator == '÷':
-                    result = self.calc_operand / current_val if current_val != 0 else 0
-                
-                self.calc_current = str(result)
-            except Exception:
-                self.calc_current = "Error"
-                
-            self.calc_operator = None
-            self.calc_operand = None
-    
-    def create_stats_widget(self):
-        """Créer le widget de statistiques"""
-        container = QFrame()
-        container.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 12px;
-                border: 2px solid #e0e0e0;
-            }
-        """)
+        # Appliquer aux groupes
+        if hasattr(self, 'scan_group'):
+            self.scan_group.setStyleSheet(group_style)
+        if hasattr(self, 'quick_purchase_group'):
+            self.quick_purchase_group.setStyleSheet(group_style)
         
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Titre
-        title = QLabel("📈 Statistiques du Jour")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #333; background: transparent; border: none;")
-        layout.addWidget(title)
-        
-        # Placeholder stats
-        stats = [
-            ("💰 Ventes", "...", "#2ecc71"),
-            ("🛒 Transactions", "...", "#3498db"),
-        ]
-        
-        for label, value, color in stats:
-            stat_widget = self.create_stat_item(label, value, color)
-            layout.addWidget(stat_widget)
-        
-        layout.addStretch()
-        container.setLayout(layout)
-        
-        return container
-    
-    def create_stat_item(self, label, value, color):
-        """Créer un élément de statistique"""
-        widget = QFrame()
-        widget.setStyleSheet(f"""
-            QFrame {{
-                background-color: {color}15;
-                border-left: 4px solid {color};
-                border-radius: 6px;
-                padding: 10px;
-            }}
-        """)
-        
-        layout = QHBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        label_widget = QLabel(label)
-        label_widget.setStyleSheet(f"color: #333; font-size: 14px; background: transparent; border: none;")
-        layout.addWidget(label_widget)
-        
-        layout.addStretch()
-        
-        value_widget = QLabel(value)
-        value_widget.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold; background: transparent; border: none;")
-        layout.addWidget(value_widget)
-        
-        widget.setLayout(layout)
-        return widget
+        # Appliquer aux inputs
+        if hasattr(self, 'scan_input'):
+            self.scan_input.setStyleSheet(input_style)
+

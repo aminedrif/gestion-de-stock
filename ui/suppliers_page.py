@@ -12,6 +12,7 @@ from PyQt5.QtGui import QColor, QFont
 from modules.suppliers.supplier_manager import supplier_manager
 from core.auth import auth_manager
 from core.logger import logger
+from ui.purchase_dialog import PurchaseDialog
 
 class SupplierFormDialog(QDialog):
     """Dialogue d'ajout/modification de fournisseur"""
@@ -86,6 +87,12 @@ class DebtPaymentDialog(QDialog):
     def __init__(self, supplier, parent=None):
         super().__init__(parent)
         self.supplier = supplier
+        # Conversion sûre en float
+        try:
+            self.supplier['total_debt'] = float(self.supplier.get('total_debt', 0))
+        except (ValueError, TypeError):
+             self.supplier['total_debt'] = 0.0
+
         self.setWindowTitle(f"Règlement Dette: {supplier['company_name']}")
         self.setup_ui()
         
@@ -144,31 +151,111 @@ class SuppliersPage(QWidget):
         
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setSpacing(15)
         
-        # Toolbar
+        # En-tête
+        header = QLabel("🏭 Gestion des Fournisseurs")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
+        layout.addWidget(header)
+        
+        # Toolbar - Améliorée
         toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
+        
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Rechercher fournisseur...")
+        self.search_input.setPlaceholderText("🔍 Rechercher fournisseur...")
+        self.search_input.setMinimumHeight(50)
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 15px;
+                background-color: white;
+            }
+            QLineEdit:focus {
+                border-color: #9b59b6;
+            }
+        """)
         self.search_input.textChanged.connect(self.load_suppliers)
         toolbar.addWidget(self.search_input)
         
         self.filter_combo = QComboBox()
+        self.filter_combo.setMinimumHeight(50)
+        self.filter_combo.setMinimumWidth(180)
         self.filter_combo.addItems(["Tous les fournisseurs", "Avec dettes"])
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 14px;
+                background-color: white;
+            }
+        """)
         self.filter_combo.currentIndexChanged.connect(self.load_suppliers)
         toolbar.addWidget(self.filter_combo)
         
         new_btn = QPushButton("➕ Nouveau Fournisseur")
-        new_btn.setStyleSheet("background-color: #3498db; color: white;")
+        new_btn.setMinimumHeight(50)
+        new_btn.setCursor(Qt.PointingHandCursor)
+        new_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9b59b6;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #8e44ad;
+            }
+        """)
         new_btn.clicked.connect(self.open_new_dialog)
         toolbar.addWidget(new_btn)
         
         layout.addLayout(toolbar)
         
-        # Table
+        # Table - Style amélioré
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Code", "Entreprise", "Contact", "Téléphone", "Dettes à payer", "Actions"])
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels([
+            "Code", "Entreprise", "Contact", "Téléphone", 
+            "Total Achats", "Dettes à payer", "Actions"
+        ])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                background-color: white;
+                gridline-color: #f0f0f0;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 10px;
+            }
+            QTableWidget::item:selected {
+                background-color: #9b59b6;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 12px;
+                border: none;
+                font-weight: bold;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+            QTableWidget::item:alternate {
+                background-color: #f8f9fa;
+            }
+        """)
         layout.addWidget(self.table)
         
         self.setLayout(layout)
@@ -192,10 +279,26 @@ class SuppliersPage(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(s.get('contact_person', '')))
             self.table.setItem(row, 3, QTableWidgetItem(s.get('phone', '')))
             
-            debt_item = QTableWidgetItem(f"{s['total_debt']:.2f} DA")
-            if s['total_debt'] > 0:
+            # Total Achats
+            try:
+                total_purchases = float(s.get('total_purchases', 0))
+            except (ValueError, TypeError):
+                total_purchases = 0.0
+                
+            purchases_item = QTableWidgetItem(f"{total_purchases:.2f} DA")
+            purchases_item.setForeground(QColor("#3498db"))
+            self.table.setItem(row, 4, purchases_item)
+            
+            # Dettes
+            try:
+                total_debt = float(s.get('total_debt', 0))
+            except (ValueError, TypeError):
+                total_debt = 0.0
+                
+            debt_item = QTableWidgetItem(f"{total_debt:.2f} DA")
+            if total_debt > 0:
                 debt_item.setForeground(QColor("red"))
-            self.table.setItem(row, 4, debt_item)
+            self.table.setItem(row, 5, debt_item)
             
             # Actions
             widget = QWidget()
@@ -207,14 +310,21 @@ class SuppliersPage(QWidget):
             edit_btn.clicked.connect(lambda checked, x=s: self.open_edit_dialog(x))
             hbox.addWidget(edit_btn)
             
-            if s['total_debt'] > 0:
+            # Bouton pour ajouter dette/achat
+            add_purchase_btn = QPushButton("🛒")
+            add_purchase_btn.setToolTip("Ajouter Achat")
+            add_purchase_btn.setStyleSheet("color: blue;")
+            add_purchase_btn.clicked.connect(lambda checked, x=s: self.open_purchase_dialog(x))
+            hbox.addWidget(add_purchase_btn)
+            
+            if total_debt > 0:
                 pay_btn = QPushButton("💸")
                 pay_btn.setToolTip("Régler Dette")
                 pay_btn.setStyleSheet("color: green;")
                 pay_btn.clicked.connect(lambda checked, x=s: self.open_payment_dialog(x))
                 hbox.addWidget(pay_btn)
                 
-            self.table.setCellWidget(row, 5, widget)
+            self.table.setCellWidget(row, 6, widget)
             
     def open_new_dialog(self):
         if SupplierFormDialog(parent=self).exec_():
@@ -227,7 +337,102 @@ class SuppliersPage(QWidget):
     def open_payment_dialog(self, supplier):
         if DebtPaymentDialog(supplier, parent=self).exec_():
             self.load_suppliers()
+    
+    def open_purchase_dialog(self, supplier):
+        """Ouvrir le dialogue d'ajout d'achat"""
+        if PurchaseDialog(supplier, supplier_manager, auth_manager, parent=self).exec_():
+            self.load_suppliers()
 
     def refresh(self):
         """Rafraîchir les données"""
         self.load_suppliers()
+    
+    def set_dark_mode(self, is_dark):
+        """Appliquer le mode sombre/clair"""
+        if is_dark:
+            # Mode sombre
+            table_style = """
+                QTableWidget {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    gridline-color: #4a6785;
+                    border: 1px solid #4a6785;
+                    border-radius: 8px;
+                }
+                QTableWidget::item {
+                    padding: 8px;
+                    border-bottom: 1px solid #4a6785;
+                }
+                QTableWidget::item:selected {
+                    background-color: #9b59b6;
+                    color: white;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #2c3e50;
+                }
+                QHeaderView::section {
+                    background-color: #9b59b6;
+                    color: white;
+                    padding: 10px;
+                    border: none;
+                    font-weight: bold;
+                }
+            """
+            input_style = """
+                QLineEdit, QComboBox {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    border: 2px solid #4a6785;
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+                QLineEdit:focus, QComboBox:focus {
+                    border-color: #9b59b6;
+                }
+            """
+        else:
+            # Mode clair
+            table_style = """
+                QTableWidget {
+                    background-color: white;
+                    color: #2c3e50;
+                    gridline-color: #e0e0e0;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                }
+                QTableWidget::item {
+                    padding: 8px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                QTableWidget::item:selected {
+                    background-color: #9b59b6;
+                    color: white;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #f8f9fa;
+                }
+                QHeaderView::section {
+                    background-color: #9b59b6;
+                    color: white;
+                    padding: 10px;
+                    border: none;
+                    font-weight: bold;
+                }
+            """
+            input_style = """
+                QLineEdit, QComboBox {
+                    background-color: white;
+                    color: #2c3e50;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+                QLineEdit:focus, QComboBox:focus {
+                    border-color: #9b59b6;
+                }
+            """
+        
+        self.table.setStyleSheet(table_style)
+        if hasattr(self, 'search_input'):
+            self.search_input.setStyleSheet(input_style)
+

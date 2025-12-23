@@ -66,8 +66,39 @@ class POSManager:
         
         return self.current_cart.add_item(product, quantity)
     
-    def complete_sale(self, cashier_id: int, payment_method: str = 'cash',
-                     amount_paid: float = None, customer_id: int = None) -> tuple[bool, str, Optional[int]]:
+    def add_to_cart(self, product_id: int, quantity: float = 1.0, custom_price: float = None, product_name: str = None) -> tuple[bool, str]:
+        """
+        Ajouter un produit au panier (générique)
+        
+        Args:
+            product_id: ID du produit (0 pour divers)
+            quantity: Quantité
+            custom_price: Prix personnalisé (optionnel)
+            product_name: Nom personnalisé (optionnel)
+            
+        Returns:
+            (success, message)
+        """
+        if product_id <= 0:
+            # Produit temporaire / divers
+            product = {
+                'id': product_id,
+                'name': product_name or "Produit Divers",
+                'selling_price': custom_price or 0,
+                'purchase_price': 0,  # Pas de coût d'achat pour produit divers
+                'barcode': '',
+                'stock_quantity': 999
+            }
+        else:
+            product = product_manager.get_product(product_id)
+            if not product:
+                return False, "Produit introuvable"
+                
+            if custom_price is not None:
+                product['selling_price'] = custom_price
+        
+        return self.current_cart.add_item(product, quantity)
+
         """
         Finaliser une vente
         

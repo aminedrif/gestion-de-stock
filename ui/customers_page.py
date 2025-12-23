@@ -89,6 +89,12 @@ class PaymentDialog(QDialog):
     def __init__(self, customer, parent=None):
         super().__init__(parent)
         self.customer = customer
+        # Conversion sûre en float
+        try:
+            self.customer['current_credit'] = float(self.customer.get('current_credit', 0))
+        except (ValueError, TypeError):
+             self.customer['current_credit'] = 0.0
+             
         self.setWindowTitle(f"Règlement Crédit: {self.customer['full_name']}")
         self.setup_ui()
         
@@ -162,32 +168,108 @@ class CustomersPage(QWidget):
         
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setSpacing(15)
         
-        # Toolbar
+        # En-tête
+        header = QLabel("👥 Gestion des Clients")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
+        layout.addWidget(header)
+        
+        # Toolbar - Améliorée
         toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
+        
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Rechercher client...")
+        self.search_input.setPlaceholderText("🔍 Rechercher client...")
+        self.search_input.setMinimumHeight(50)
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 15px;
+                background-color: white;
+            }
+            QLineEdit:focus {
+                border-color: #2ecc71;
+            }
+        """)
         self.search_input.textChanged.connect(self.load_customers)
         toolbar.addWidget(self.search_input)
         
         self.filter_combo = QComboBox()
+        self.filter_combo.setMinimumHeight(50)
+        self.filter_combo.setMinimumWidth(200)
         self.filter_combo.addItems(["Tous les clients", "Avec dettes (Crédit > 0)", "Meilleurs clients"])
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 14px;
+                background-color: white;
+            }
+        """)
         self.filter_combo.currentIndexChanged.connect(self.load_customers)
         toolbar.addWidget(self.filter_combo)
         
         new_btn = QPushButton("➕ Nouveau Client")
-        new_btn.setStyleSheet("background-color: #3498db; color: white;")
+        new_btn.setMinimumHeight(50)
+        new_btn.setCursor(Qt.PointingHandCursor)
+        new_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2ecc71;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+            }
+        """)
         new_btn.clicked.connect(self.open_new_dialog)
         toolbar.addWidget(new_btn)
         
         layout.addLayout(toolbar)
         
-        # Table
+        # Table - Style amélioré
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(["Code", "Nom", "Téléphone", "Dette (Crédit)", "Total Achats", "Actions"])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Read-only
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                background-color: white;
+                gridline-color: #f0f0f0;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 10px;
+            }
+            QTableWidget::item:selected {
+                background-color: #2ecc71;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 12px;
+                border: none;
+                font-weight: bold;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+            QTableWidget::item:alternate {
+                background-color: #f8f9fa;
+            }
+        """)
         layout.addWidget(self.table)
         
         self.setLayout(layout)
@@ -214,12 +296,22 @@ class CustomersPage(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(c['full_name']))
             self.table.setItem(row, 2, QTableWidgetItem(c.get('phone', '')))
             
-            credit_item = QTableWidgetItem(f"{c['current_credit']:.2f} DA")
-            if c['current_credit'] > 0:
+            try:
+                current_credit = float(c.get('current_credit', 0))
+            except (ValueError, TypeError):
+                current_credit = 0.0
+                
+            try:
+                total_purchases = float(c.get('total_purchases', 0))
+            except (ValueError, TypeError):
+                total_purchases = 0.0
+
+            credit_item = QTableWidgetItem(f"{current_credit:.2f} DA")
+            if current_credit > 0:
                 credit_item.setForeground(QColor("red"))
             self.table.setItem(row, 3, credit_item)
             
-            self.table.setItem(row, 4, QTableWidgetItem(f"{c['total_purchases']:.2f} DA"))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{total_purchases:.2f} DA"))
             
             # Actions
             widget = QWidget()
@@ -231,7 +323,7 @@ class CustomersPage(QWidget):
             edit_btn.clicked.connect(lambda checked, x=c: self.open_edit_dialog(x))
             hbox.addWidget(edit_btn)
             
-            if c['current_credit'] > 0:
+            if current_credit > 0:
                 pay_btn = QPushButton("💰")
                 pay_btn.setToolTip("Régler Dette")
                 pay_btn.setStyleSheet("color: green;")
@@ -275,3 +367,93 @@ class CustomersPage(QWidget):
     def refresh(self):
         """Rafraîchir les données"""
         self.load_customers()
+    
+    def set_dark_mode(self, is_dark):
+        """Appliquer le mode sombre/clair"""
+        if is_dark:
+            # Mode sombre
+            table_style = """
+                QTableWidget {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    gridline-color: #4a6785;
+                    border: 1px solid #4a6785;
+                    border-radius: 8px;
+                }
+                QTableWidget::item {
+                    padding: 8px;
+                    border-bottom: 1px solid #4a6785;
+                }
+                QTableWidget::item:selected {
+                    background-color: #27ae60;
+                    color: white;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #2c3e50;
+                }
+                QHeaderView::section {
+                    background-color: #27ae60;
+                    color: white;
+                    padding: 10px;
+                    border: none;
+                    font-weight: bold;
+                }
+            """
+            input_style = """
+                QLineEdit, QComboBox {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    border: 2px solid #4a6785;
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+                QLineEdit:focus, QComboBox:focus {
+                    border-color: #27ae60;
+                }
+            """
+        else:
+            # Mode clair
+            table_style = """
+                QTableWidget {
+                    background-color: white;
+                    color: #2c3e50;
+                    gridline-color: #e0e0e0;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                }
+                QTableWidget::item {
+                    padding: 8px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                QTableWidget::item:selected {
+                    background-color: #27ae60;
+                    color: white;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #f8f9fa;
+                }
+                QHeaderView::section {
+                    background-color: #27ae60;
+                    color: white;
+                    padding: 10px;
+                    border: none;
+                    font-weight: bold;
+                }
+            """
+            input_style = """
+                QLineEdit, QComboBox {
+                    background-color: white;
+                    color: #2c3e50;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+                QLineEdit:focus, QComboBox:focus {
+                    border-color: #27ae60;
+                }
+            """
+        
+        self.table.setStyleSheet(table_style)
+        if hasattr(self, 'search_input'):
+            self.search_input.setStyleSheet(input_style)
+

@@ -6,8 +6,9 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QLineEdit, QTableWidget, QTableWidgetItem,
                              QComboBox, QFrame, QMessageBox, QHeaderView, QSpinBox,
                              QDoubleSpinBox, QGroupBox, QGridLayout, QDialog,
-                             QFormLayout, QInputDialog, QAbstractItemView, QShortcut, QTextBrowser)
-from PyQt5.QtCore import Qt, QTimer
+                             QFormLayout, QInputDialog, QAbstractItemView, QShortcut, QTextBrowser,
+                             QCheckBox, QCompleter)
+from PyQt5.QtCore import Qt, QTimer, QStringListModel
 # ... imports ...
 from modules.sales.printer import printer_manager
 
@@ -320,8 +321,12 @@ class POSPage(QWidget):
             }
         """)
         self.barcode_input.returnPressed.connect(self.scan_product)
+        # Auto-scan après un court délai (pour scanners automatiques)
+        self.scan_timer = QTimer()
+        self.scan_timer.setSingleShot(True)
+        self.scan_timer.timeout.connect(self.auto_scan_product)
+        self.barcode_input.textChanged.connect(self.on_barcode_text_changed)
         scanner_layout.addWidget(self.barcode_input)
-        
         scanner_group.setLayout(scanner_layout)
         layout.addWidget(scanner_group)
         
@@ -409,6 +414,100 @@ class POSPage(QWidget):
         """)
         layout.addWidget(self.products_table)
         
+        # Calculatrice intégrée (Montant Libre) - EN BAS
+        calc_group = QGroupBox("🧮 Calculatrice (Montant Libre)")
+        calc_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #27ae60;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+                background-color: #f8fff8;
+            }
+            QGroupBox::title {
+                color: #27ae60;
+            }
+        """)
+        calc_layout = QVBoxLayout()
+        
+        # Écran d'affichage
+        self.calc_display = QLineEdit("0")
+        self.calc_display.setReadOnly(True)
+        self.calc_display.setAlignment(Qt.AlignRight)
+        self.calc_display.setMinimumHeight(50)
+        self.calc_display.setStyleSheet("""
+            font-size: 24px; 
+            font-weight: bold;
+            padding: 8px; 
+            border: 2px solid #27ae60; 
+            border-radius: 8px;
+            background-color: #e8f5e9;
+            color: #2c3e50;
+        """)
+        calc_layout.addWidget(self.calc_display)
+        
+        # Grille de boutons
+        calc_grid = QGridLayout()
+        calc_grid.setSpacing(4)
+        
+        calc_buttons = [
+            ('7', 0, 0), ('8', 0, 1), ('9', 0, 2),
+            ('4', 1, 0), ('5', 1, 1), ('6', 1, 2),
+            ('1', 2, 0), ('2', 2, 1), ('3', 2, 2),
+            ('0', 3, 0), ('00', 3, 1), ('C', 3, 2),
+        ]
+        
+        for text, row, col in calc_buttons:
+            btn = QPushButton(text)
+            btn.setMinimumHeight(45)
+            btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 18px;
+                    font-weight: bold;
+                    background-color: #ffffff;
+                    border: 1px solid #ccc;
+                    border-radius: 6px;
+                }
+                QPushButton:hover {
+                    background-color: #e8e8e8;
+                }
+                QPushButton:pressed {
+                    background-color: #d0d0d0;
+                }
+            """)
+            if text == 'C':
+                btn.setStyleSheet(btn.styleSheet() + "background-color: #ffcccc; color: #c0392b;")
+                btn.clicked.connect(self.calc_clear)
+            else:
+                btn.clicked.connect(lambda checked, t=text: self.calc_add_digit(t))
+            calc_grid.addWidget(btn, row, col)
+        
+        calc_layout.addLayout(calc_grid)
+        
+        # Bouton Ajouter au panier
+        calc_add_btn = QPushButton("✅ AJOUTER AU PANIER")
+        calc_add_btn.setMinimumHeight(50)
+        calc_add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #219150;
+            }
+        """)
+        calc_add_btn.clicked.connect(self.add_from_calculator)
+        calc_layout.addWidget(calc_add_btn)
+        
+        calc_group.setLayout(calc_layout)
+        layout.addWidget(calc_group)
+        
         panel.setLayout(layout)
         return panel
     
@@ -427,11 +526,11 @@ class POSPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
-        # Client
+        # Client - avec recherche clavier
         customer_group = QGroupBox("👤 Client")
         customer_group.setStyleSheet("""
             QGroupBox {
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
                 border: 2px solid #e0e0e0;
                 border-radius: 8px;
@@ -442,22 +541,51 @@ class POSPage(QWidget):
         customer_layout = QHBoxLayout()
         
         self.customer_combo = QComboBox()
-        self.customer_combo.setMinimumHeight(40)
-        self.customer_combo.addItem("Client anonyme", None)
+        self.customer_combo.setMinimumHeight(50)
+        self.customer_combo.setEditable(True)  # Permet la recherche au clavier
+        self.customer_combo.lineEdit().setPlaceholderText("🔍 Rechercher un client (Nom, Tél)...")
+        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)  # Ne pas ajouter de nouveaux items
+        self.customer_combo.addItem("👤 Client de passage", None)
+        self.customer_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self.customer_combo.completer().setFilterMode(Qt.MatchContains)  # Recherche partielle
         self.load_customers()
         self.customer_combo.setStyleSheet("""
             QComboBox {
-                padding: 8px 12px;
+                padding: 10px 15px;
                 border: 2px solid #e0e0e0;
-                border-radius: 6px;
-                font-size: 13px;
+                border-radius: 8px;
+                font-size: 15px;
                 color: #333;
             }
             QComboBox QAbstractItemView {
                 color: #333;
+                font-size: 14px;
+            }
+            QComboBox::drop-down {
+                width: 40px;
             }
         """)
         customer_layout.addWidget(self.customer_combo)
+        
+        # Bouton Vider sélection
+        self.clear_customer_btn = QPushButton("❌")
+        self.clear_customer_btn.setFixedSize(50, 50)
+        self.clear_customer_btn.setToolTip("Réinitialiser (Client de passage)")
+        self.clear_customer_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+                color: #555;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+                color: #e74c3c;
+            }
+        """)
+        self.clear_customer_btn.clicked.connect(lambda: self.customer_combo.setCurrentIndex(0))
+        customer_layout.addWidget(self.clear_customer_btn)
         
         customer_group.setLayout(customer_layout)
         layout.addWidget(customer_group)
@@ -531,7 +659,7 @@ class POSPage(QWidget):
         
         self.payment_method = QComboBox()
         self.payment_method.addItem("💵 Espèces", "cash")
-        self.payment_method.addItem("💳 Carte", "card")
+        # Carte supprimée à la demande
         self.payment_method.addItem("📝 Crédit", "credit")
         self.payment_method.setMinimumHeight(40)
         self.payment_method.setStyleSheet("""
@@ -548,23 +676,29 @@ class POSPage(QWidget):
         """)
         payment_layout.addWidget(self.payment_method)
         
+        # Checkbox pour imprimer le ticket
+        self.print_receipt_cb = QCheckBox("🖨️ Imprimer le ticket")
+        self.print_receipt_cb.setChecked(True)
+        self.print_receipt_cb.setStyleSheet("font-size: 14px; padding: 5px;")
+        payment_layout.addWidget(self.print_receipt_cb)
+        
         payment_group.setLayout(payment_layout)
         layout.addWidget(payment_group)
         
-        # Boutons d'action
+        # Boutons d'action - Plus gros pour écran tactile
         buttons_layout = QVBoxLayout()
-        buttons_layout.setSpacing(10)
+        buttons_layout.setSpacing(12)
         
-        # Bouton Payer
-        pay_btn = QPushButton("💰 PAYER")
-        pay_btn.setMinimumHeight(60)
+        # Bouton Payer - TRÈS GRAND pour écran tactile
+        pay_btn = QPushButton("💰 PAYER (F9)")
+        pay_btn.setMinimumHeight(80)
         pay_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2ecc71;
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 18px;
+                border-radius: 12px;
+                font-size: 24px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -577,18 +711,19 @@ class POSPage(QWidget):
         pay_btn.clicked.connect(self.process_payment)
         buttons_layout.addWidget(pay_btn)
         
-        # Boutons secondaires
+        # Boutons secondaires - Plus gros
         secondary_layout = QHBoxLayout()
+        secondary_layout.setSpacing(10)
         
         clear_btn = QPushButton("🗑️ Vider")
-        clear_btn.setMinimumHeight(45)
+        clear_btn.setMinimumHeight(55)
         clear_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 14px;
+                border-radius: 10px;
+                font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -597,16 +732,17 @@ class POSPage(QWidget):
         """)
         clear_btn.clicked.connect(self.clear_cart)
         secondary_layout.addWidget(clear_btn)
+
         
         discount_btn = QPushButton("🏷️ Remise")
-        discount_btn.setMinimumHeight(45)
+        discount_btn.setMinimumHeight(55)
         discount_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f39c12;
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 14px;
+                border-radius: 10px;
+                font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -618,14 +754,14 @@ class POSPage(QWidget):
         
         # Bouton Retour
         return_btn = QPushButton("↩️ Retour")
-        return_btn.setMinimumHeight(45)
+        return_btn.setMinimumHeight(55)
         return_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95a5a6;
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 14px;
+                border-radius: 10px;
+                font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -721,6 +857,21 @@ class POSPage(QWidget):
             self.customer_combo.setStyleSheet(combo_style)
             self.payment_method.setStyleSheet(combo_style)
             
+            if hasattr(self, 'clear_customer_btn'):
+                self.clear_customer_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #34495e;
+                        border: 1px solid #555;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        color: #ecf0f1;
+                    }
+                    QPushButton:hover {
+                        background-color: #4a6785;
+                        color: #e74c3c;
+                    }
+                """)
+            
         else:
             # Mode clair (reset aux styles d'origine)
             self.left_panel_container.setStyleSheet("""
@@ -783,6 +934,21 @@ class POSPage(QWidget):
             """
             self.customer_combo.setStyleSheet(combo_style)
             self.payment_method.setStyleSheet(combo_style)
+            
+            if hasattr(self, 'clear_customer_btn'):
+                self.clear_customer_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #e0e0e0;
+                        border: none;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        color: #555;
+                    }
+                    QPushButton:hover {
+                        background-color: #d0d0d0;
+                        color: #e74c3c;
+                    }
+                """)
 
     def load_customers(self):
         """Charger la liste des clients"""
@@ -814,6 +980,20 @@ class POSPage(QWidget):
         except Exception as e:
             logger.error(f"Erreur scan produit: {e}")
             QMessageBox.critical(self, "Erreur", f"Erreur lors du scan: {e}")
+    
+    def on_barcode_text_changed(self, text):
+        """Démarrer le timer pour auto-scan"""
+        if text.strip():
+            # Redémarrer le timer à chaque frappe
+            self.scan_timer.start(300)  # 300ms délai
+        else:
+            self.scan_timer.stop()
+    
+    def auto_scan_product(self):
+        """Auto-scan du produit après délai"""
+        barcode = self.barcode_input.text().strip()
+        if barcode and len(barcode) >= 3:  # Au moins 3 caractères
+            self.scan_product()
     
     def search_products(self):
         """Rechercher des produits"""
@@ -954,21 +1134,105 @@ class POSPage(QWidget):
         dialog = ReturnDialog(self)
         dialog.exec_()
     
+    def add_custom_product(self):
+        """Ajouter un produit personnalisé (non référencé dans la base)"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("➕ Ajouter un Produit Personnalisé")
+        dialog.setMinimumWidth(400)
+        
+        layout = QVBoxLayout()
+        form = QFormLayout()
+        
+        # Champs
+        name_input = QLineEdit()
+        name_input.setPlaceholderText("Ex: Service, Réparation, Article divers...")
+        name_input.setMinimumHeight(40)
+        
+        price_input = QDoubleSpinBox()
+        price_input.setRange(0, 999999)
+        price_input.setDecimals(2)
+        price_input.setSuffix(" DA")
+        price_input.setMinimumHeight(40)
+        price_input.setStyleSheet("font-size: 16px;")
+        
+        qty_input = QDoubleSpinBox()
+        qty_input.setRange(0.01, 1000)
+        qty_input.setValue(1)
+        qty_input.setMinimumHeight(40)
+        
+        form.addRow("Nom du produit:", name_input)
+        form.addRow("Prix unitaire:", price_input)
+        form.addRow("Quantité:", qty_input)
+        
+        layout.addLayout(form)
+        
+        # Boutons
+        btn_layout = QHBoxLayout()
+        
+        add_btn = QPushButton("✅ Ajouter au panier")
+        add_btn.setStyleSheet("background-color: #27ae60; color: white; padding: 12px; font-weight: bold;")
+        add_btn.setMinimumHeight(50)
+        
+        cancel_btn = QPushButton("Annuler")
+        cancel_btn.setMinimumHeight(50)
+        
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(add_btn)
+        layout.addLayout(btn_layout)
+        
+        dialog.setLayout(layout)
+        
+        def add_to_cart():
+            name = name_input.text().strip()
+            price = price_input.value()
+            qty = qty_input.value()
+            
+            if not name:
+                QMessageBox.warning(dialog, "Erreur", "Veuillez entrer un nom de produit")
+                return
+            if price <= 0:
+                QMessageBox.warning(dialog, "Erreur", "Veuillez entrer un prix valide")
+                return
+            
+            # Créer un produit temporaire (non sauvegardé en base)
+            custom_product = {
+                'id': -1,  # ID négatif pour indiquer produit personnalisé
+                'barcode': f"CUSTOM-{datetime.now().strftime('%H%M%S')}",
+                'name': name,
+                'selling_price': price,
+                'purchase_price': 0,
+                'stock_quantity': 999  # Stock illimité pour produit personnalisé
+            }
+            
+            success, msg = self.cart.add_item(custom_product, qty)
+            if success:
+                self.update_cart_display()
+                dialog.accept()
+                QMessageBox.information(self, "✅ Ajouté", f"{name} x{qty} ajouté au panier")
+            else:
+                QMessageBox.warning(dialog, "Erreur", msg)
+        
+        add_btn.clicked.connect(add_to_cart)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        dialog.exec_()
+    
     def process_payment(self):
         """Traiter le paiement"""
         # Check explicitement si items est vide
         if not self.cart.items:
-            # Double vérification avec is_empty si disponible
-            if hasattr(self.cart, 'is_empty') and self.cart.is_empty():
-                QMessageBox.warning(self, "Panier vide", "Ajoutez des produits avant de payer")
-                return
-            elif not self.cart.items:
-                QMessageBox.warning(self, "Panier vide", "Ajoutez des produits avant de payer")
-                return
+            QMessageBox.warning(self, "Panier vide", "Ajoutez des produits avant de payer")
+            return
         
         try:
             customer_id = self.customer_combo.currentData()
             payment_method = self.payment_method.currentData()
+            
+            # Vérifier si crédit est sélectionné mais pas de client
+            if payment_method == 'credit' and not customer_id:
+                QMessageBox.warning(self, "Client requis", 
+                    "Vous devez sélectionner un client pour un paiement à crédit")
+                return
             
             # Obtenir l'utilisateur actuel (caissier)
             current_user = auth_manager.get_current_user()
@@ -990,11 +1254,16 @@ class POSPage(QWidget):
                 self.customer_combo.setCurrentIndex(0)
                 self.payment_method.setCurrentIndex(0)
                 
-                # Afficher l'aperçu du ticket
-                sale_data = pos_manager.get_sale(sale_id)
-                if sale_data:
-                    preview = ReceiptPreviewDialog(sale_data, self)
-                    preview.exec_()
+                # Afficher l'aperçu du ticket SEULEMENT si checkbox cochée
+                if self.print_receipt_cb.isChecked():
+                    sale_data = pos_manager.get_sale(sale_id)
+                    if sale_data:
+                        preview = ReceiptPreviewDialog(sale_data, self)
+                        preview.exec_()
+                else:
+                    # Juste un message de succès sans impression
+                    QMessageBox.information(self, "✅ Vente enregistrée", 
+                        f"Vente #{message.split(':')[-1].strip()} enregistrée avec succès!")
                 
             else:
                 QMessageBox.warning(self, "Erreur", message)
@@ -1003,11 +1272,223 @@ class POSPage(QWidget):
             logger.error(f"Erreur paiement: {e}")
             QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {e}")
 
-            QMessageBox.critical(self, "Erreur", f"Erreur lors du paiement: {e}")
-
     def refresh(self):
         """Rafraîchir les données de la page"""
         self.customer_combo.clear()
-        self.customer_combo.addItem("Client anonyme", None)
         self.load_customers()
         self.barcode_input.setFocus()
+
+    def calc_add_digit(self, digit):
+        """Ajouter un chiffre à la calculatrice"""
+        current = self.calc_display.text()
+        if current == "0":
+            self.calc_display.setText(digit)
+        else:
+            self.calc_display.setText(current + digit)
+    
+    def calc_clear(self):
+        """Effacer la calculatrice"""
+        self.calc_display.setText("0")
+    
+    def add_from_calculator(self):
+        """Ajouter le montant de la calculatrice au panier"""
+        try:
+            price = int(self.calc_display.text())
+        except:
+            price = 0
+            
+        if price <= 0:
+            QMessageBox.warning(self, "Attention", "Le montant doit être supérieur à 0")
+            return
+            
+        success, msg = pos_manager.add_to_cart(
+            product_id=0,
+            quantity=1,
+            custom_price=price,
+            product_name="Produit Divers"
+        )
+        
+        if success:
+            self.calc_display.setText("0")
+            self.update_cart_display()
+        else:
+            QMessageBox.warning(self, "Erreur", msg)
+            
+
+class CalculatorDialog(QDialog):
+    """Dialogue Calculatrice Simple"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Calculatrice")
+        self.setFixedSize(300, 400)
+        self.layout = QVBoxLayout()
+        
+        # Écran
+        self.display = QLineEdit()
+        self.display.setReadOnly(True)
+        self.display.setAlignment(Qt.AlignRight)
+        self.display.setMinimumHeight(50)
+        self.display.setStyleSheet("font-size: 24px; padding: 5px; border: 2px solid #ccc; border-radius: 5px;")
+        self.layout.addWidget(self.display)
+        
+        # Grille boutons
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(5)
+        
+        buttons = [
+            ('7', 0, 0), ('8', 0, 1), ('9', 0, 2), ('/', 0, 3),
+            ('4', 1, 0), ('5', 1, 1), ('6', 1, 2), ('*', 1, 3),
+            ('1', 2, 0), ('2', 2, 1), ('3', 2, 2), ('-', 2, 3),
+            ('0', 3, 0), ('.', 3, 1), ('C', 3, 2), ('+', 3, 3),
+            ('=', 4, 0, 1, 4)
+        ]
+        
+        for btn_text, *pos in buttons:
+            btn = QPushButton(btn_text)
+            btn.setMinimumHeight(50)
+            btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 18px;
+                    font-weight: bold;
+                    background-color: #f0f0f0;
+                    border: 1px solid #ccc;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #e0e0e0;
+                }
+                QPushButton:pressed {
+                    background-color: #d0d0d0;
+                }
+            """)
+            
+            if btn_text == 'C':
+                btn.setStyleSheet(btn.styleSheet() + "background-color: #ffcccc; color: #c0392b;")
+                btn.clicked.connect(self.clear)
+            elif btn_text == '=':
+                btn.setStyleSheet(btn.styleSheet() + "background-color: #2ecc71; color: white;")
+                btn.clicked.connect(self.calculate)
+            else:
+                btn.clicked.connect(lambda checked, x=btn_text: self.append(x))
+            
+            if len(pos) == 4:
+                grid_layout.addWidget(btn, *pos)
+            else:
+                grid_layout.addWidget(btn, *pos)
+                
+        self.layout.addLayout(grid_layout)
+        self.setLayout(self.layout)
+        
+    def append(self, text):
+        self.display.setText(self.display.text() + text)
+        
+    def clear(self):
+        self.display.clear()
+        
+    def calculate(self):
+        try:
+            expression = self.display.text().replace('x', '*')
+            result = eval(expression)
+            self.display.setText(str(result))
+        except Exception:
+            self.display.setText("Erreur")
+
+
+class MiniCalculatorDialog(QDialog):
+    """Mini Calculatrice avec ajout direct au panier"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("💰 Montant Libre")
+        self.setFixedSize(280, 380)
+        self.value = 0
+        layout = QVBoxLayout()
+        
+        # Écran d'affichage
+        self.display = QLineEdit("0")
+        self.display.setReadOnly(True)
+        self.display.setAlignment(Qt.AlignRight)
+        self.display.setMinimumHeight(60)
+        self.display.setStyleSheet("""
+            font-size: 28px; 
+            font-weight: bold;
+            padding: 10px; 
+            border: 2px solid #27ae60; 
+            border-radius: 8px;
+            background-color: #e8f5e9;
+        """)
+        layout.addWidget(self.display)
+        
+        # Grille de boutons numériques
+        grid = QGridLayout()
+        grid.setSpacing(5)
+        
+        buttons = [
+            ('7', 0, 0), ('8', 0, 1), ('9', 0, 2),
+            ('4', 1, 0), ('5', 1, 1), ('6', 1, 2),
+            ('1', 2, 0), ('2', 2, 1), ('3', 2, 2),
+            ('0', 3, 0), ('00', 3, 1), ('C', 3, 2),
+        ]
+        
+        for text, row, col in buttons:
+            btn = QPushButton(text)
+            btn.setMinimumHeight(55)
+            btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 20px;
+                    font-weight: bold;
+                    background-color: #f5f5f5;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                }
+                QPushButton:hover {
+                    background-color: #e8e8e8;
+                }
+                QPushButton:pressed {
+                    background-color: #d0d0d0;
+                }
+            """)
+            if text == 'C':
+                btn.setStyleSheet(btn.styleSheet() + "background-color: #ffcccc; color: #c0392b;")
+                btn.clicked.connect(self.clear_display)
+            else:
+                btn.clicked.connect(lambda checked, t=text: self.add_digit(t))
+            grid.addWidget(btn, row, col)
+        
+        layout.addLayout(grid)
+        
+        # Bouton Ajouter
+        add_btn = QPushButton("✅ AJOUTER AU PANIER")
+        add_btn.setMinimumHeight(60)
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                border: none;
+                border-radius: 10px;
+            }
+            QPushButton:hover {
+                background-color: #219150;
+            }
+        """)
+        add_btn.clicked.connect(self.accept)
+        layout.addWidget(add_btn)
+        
+        self.setLayout(layout)
+    
+    def add_digit(self, digit):
+        current = self.display.text()
+        if current == "0":
+            self.display.setText(digit)
+        else:
+            self.display.setText(current + digit)
+    
+    def clear_display(self):
+        self.display.setText("0")
+    
+    def get_value(self):
+        try:
+            return int(self.display.text())
+        except:
+            return 0

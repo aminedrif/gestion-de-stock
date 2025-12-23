@@ -28,6 +28,25 @@ class CustomerManager:
             (success, message, customer_id)
         """
         try:
+            # Vérifier si le client existe déjà (par nom)
+            check_query = "SELECT id, is_active, code FROM customers WHERE full_name = ?"
+            existing = db.fetch_one(check_query, (full_name,))
+            
+            if existing:
+                customer_id, is_active, existing_code = existing
+                if is_active:
+                    return False, f"Un client avec ce nom existe déjà (Code: {existing_code})", None
+                else:
+                    # Réactiver le client
+                    update_query = """
+                        UPDATE customers 
+                        SET phone = ?, email = ?, address = ?, credit_limit = ?, is_active = 1
+                        WHERE id = ?
+                    """
+                    db.execute_update(update_query, (phone, email, address, credit_limit, customer_id))
+                    logger.info(f"Client réactivé: {full_name} (Code: {existing_code})")
+                    return True, f"Client réactivé avec succès (Code: {existing_code})", customer_id
+
             # Générer un code client unique
             code = self._generate_customer_code()
             
@@ -103,8 +122,14 @@ class CustomerManager:
         try:
             # Vérifier s'il a des crédits en cours
             customer = self.get_customer(customer_id)
-            if customer and customer['current_credit'] > 0:
-                return False, f"Impossible de supprimer: crédit en cours de {customer['current_credit']} DA"
+            if customer:
+                try:
+                    current_credit = float(customer.get('current_credit', 0))
+                except (ValueError, TypeError):
+                    current_credit = 0.0
+                    
+                if current_credit > 0:
+                    return False, f"Impossible de supprimer: crédit en cours de {current_credit:.2f} DA"
             
             query = "UPDATE customers SET is_active = 0 WHERE id = ?"
             rows_affected = db.execute_update(query, (customer_id,))

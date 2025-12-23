@@ -135,6 +135,17 @@ class AuthManager:
     def get_current_user(self) -> Optional[Dict]:
         """Obtenir les données de l'utilisateur actuel"""
         return self.current_user if self.is_authenticated() else None
+        
+    def get_all_users(self) -> list[Dict]:
+        """Obtenir tous les utilisateurs actifs"""
+        query = """
+            SELECT id, username, full_name, role, is_active, last_login 
+            FROM users 
+            WHERE is_active = 1 
+            ORDER BY username
+        """
+        results = db.execute_query(query)
+        return [dict(row) for row in results]
     
     def change_password(self, user_id: int, old_password: str, new_password: str) -> tuple[bool, str]:
         """
@@ -190,15 +201,8 @@ class AuthManager:
             (success, message, user_id)
         """
         # Vérifier si l'utilisateur existe déjà
-        check_query = "SELECT id FROM users WHERE username = ?"
+        check_query = "SELECT id, is_active FROM users WHERE username = ?"
         existing = db.fetch_one(check_query, (username,))
-        
-        if existing:
-            return False, "Ce nom d'utilisateur existe déjà", None
-        
-        # Vérifier le rôle
-        if role not in [config.USER_ROLES['ADMIN'], config.USER_ROLES['CASHIER']]:
-            return False, "Rôle invalide", None
         
         # Vérifier la longueur du mot de passe
         min_length = config.SECURITY_CONFIG['password_min_length']
@@ -207,6 +211,33 @@ class AuthManager:
         
         # Hacher le mot de passe
         password_hash = hash_password(password)
+
+        if existing:
+            user_id, is_active = existing
+            if is_active:
+                return False, "Ce nom d'utilisateur existe déjà", None
+            else:
+                # Réactiver l'utilisateur
+                update_query = """
+                    UPDATE users 
+                    SET password_hash = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = 1
+                    WHERE id = ?
+                """
+                try:
+                    db.execute_update(update_query, 
+                                     (password_hash, full_name, role, email, phone, user_id))
+                    
+                    if self.current_user:
+                        self._log_action('reactivate_user', self.current_user['id'], 
+                                       entity_type='user', entity_id=user_id)
+                    
+                    return True, "Utilisateur réactivé avec succès", user_id
+                except Exception as e:
+                    return False, f"Erreur lors de la réactivation: {str(e)}", None
+        
+        # Vérifier le rôle
+        if role not in [config.USER_ROLES['ADMIN'], config.USER_ROLES['CASHIER']]:
+            return False, "Rôle invalide", None
         
         # Insérer l'utilisateur
         insert_query = """
