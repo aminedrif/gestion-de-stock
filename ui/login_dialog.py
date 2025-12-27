@@ -1,373 +1,363 @@
 # -*- coding: utf-8 -*-
 """
-Dialogue de connexion - Design amélioré
+Dialogue de connexion - Design Premium Modern (Split Layout)
 """
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QMessageBox, QComboBox, QFrame)
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QPalette, QColor
+                             QLineEdit, QPushButton, QFrame, QGraphicsDropShadowEffect,
+                             QWidget, QApplication)
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QPropertyAnimation, QEasingCurve, QSize
+from PyQt5.QtGui import QFont, QColor, QIcon, QLinearGradient, QPalette, QBrush, QPixmap
 from core.auth import auth_manager
 from core.logger import logger
 import config
-
+import os
 
 class LoginDialog(QDialog):
-    """Dialogue de connexion avec design moderne"""
+    """Dialogue de connexion moderne avec layout séparé (Split View)"""
     
     login_successful = pyqtSignal(dict)
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"{config.APP_NAME} - Connexion")
-        self.setFixedSize(550, 700)  # Plus grande fenêtre
-        self.setModal(True)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_NoSystemBackground, False)
+        self.setStyleSheet("background: transparent;") # Fix for white corners
+        self.setFixedSize(900, 550)
         
-        # Centrer la fenêtre
+        self.init_ui()
         self.center_on_screen()
         
-        # Initialiser l'UI
-        self.init_ui()
+        # Variables pour le déplacement de la fenêtre
+        self.old_pos = self.pos()
         
-        # Appliquer le style
-        self.apply_style()
-    
     def center_on_screen(self):
-        """Centrer la fenêtre sur l'écran"""
-        from PyQt5.QtWidgets import QDesktopWidget
-        screen = QDesktopWidget().screenGeometry()
-        size = self.geometry()
+        screen = QApplication.primaryScreen().geometry()
+        window = self.geometry()
         self.move(
-            (screen.width() - size.width()) // 2,
-            (screen.height() - size.height()) // 2
+            (screen.width() - window.width()) // 2,
+            (screen.height() - window.height()) // 2
         )
-    
+        
     def init_ui(self):
-        """Initialiser l'interface utilisateur"""
-        layout = QVBoxLayout()
-        layout.setSpacing(0)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # En-tête avec gradient
-        header = QFrame()
-        header.setFixedHeight(200)
-        header.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #667eea,
-                    stop:1 #764ba2
-                );
-                border-radius: 0px;
-            }
-        """)
-        
-        header_layout = QVBoxLayout()
-        header_layout.setAlignment(Qt.AlignCenter)
-        header_layout.setSpacing(10)
-        
-        # Icône/Logo
-        logo_label = QLabel("🏪")
-        logo_label.setStyleSheet("font-size: 60px; background: transparent;")
-        logo_label.setAlignment(Qt.AlignCenter)
-        header_layout.addWidget(logo_label)
-        
-        # Titre
-        title_label = QLabel(config.APP_NAME)
-        title_font = QFont()
-        title_font.setPointSize(24)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: white; background: transparent;")
-        header_layout.addWidget(title_label)
-        
-        # Sous-titre
-        subtitle_label = QLabel("Système de Gestion Professionnel")
-        subtitle_label.setAlignment(Qt.AlignCenter)
-        subtitle_label.setStyleSheet("color: rgba(255, 255, 255, 0.9); font-size: 13px; background: transparent;")
-        header_layout.addWidget(subtitle_label)
-        
-        header.setLayout(header_layout)
-        layout.addWidget(header)
-        
-        # Corps du formulaire
-        form_container = QFrame()
-        form_container.setStyleSheet("background-color: white;")
-        form_layout = QVBoxLayout()
-        form_layout.setSpacing(20)
-        form_layout.setContentsMargins(40, 40, 40, 40)
-        
-        # Message de bienvenue
-        welcome_label = QLabel("Bienvenue ! Connectez-vous pour continuer")
-        welcome_label.setAlignment(Qt.AlignCenter)
-        welcome_label.setStyleSheet("QLabel { color: #555; font-size: 14px; }")
-        form_layout.addWidget(welcome_label)
-        
-        # Espacement
-        form_layout.addSpacing(15)
-        
-        # Sélection de langue - PLUS VISIBLE
-        lang_container = QFrame()
-        lang_container.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border-radius: 10px;
-                padding: 15px;
-                border: 2px solid #e0e0e0;
-            }
-        """)
-        lang_layout = QHBoxLayout()
-        lang_layout.setContentsMargins(15, 15, 15, 15)
-        lang_layout.setSpacing(15)
-        
-        lang_icon = QLabel("🌐")
-        lang_icon.setStyleSheet("font-size: 24px; background: transparent;")
-        lang_layout.addWidget(lang_icon)
-        
-        lang_label = QLabel("Langue:")
-        lang_label.setStyleSheet("color: #333; font-size: 14px; font-weight: bold; background: transparent;")
-        lang_layout.addWidget(lang_label)
-        
-        self.language_combo = QComboBox()
-        self.language_combo.addItem("🇫🇷 Français", "fr")
-        self.language_combo.addItem("🇩🇿 العربية", "ar")
-        self.language_combo.setMinimumHeight(45)
-        self.language_combo.setStyleSheet("""
-            QComboBox {
-                padding: 10px 15px;
-                border: 2px solid #667eea;
-                border-radius: 8px;
+        # Container principal (arrondi)
+        self.main_container = QFrame(self)
+        self.main_container.setGeometry(10, 10, 880, 530) # Leaving space for shadow
+        self.main_container.setStyleSheet("""
+            QFrame#mainContainer {
                 background-color: white;
-                font-size: 14px;
-                font-weight: bold;
-                min-width: 180px;
-            }
-            QComboBox:hover {
-                border-color: #764ba2;
-                background-color: #f0f4ff;
-            }
-            QComboBox::drop-down {
-                border: none;
-                padding-right: 15px;
-                width: 30px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid #667eea;
-                margin-right: 10px;
+                border-radius: 20px;
             }
         """)
-        lang_layout.addWidget(self.language_combo)
-        lang_layout.addStretch()
+        self.main_container.setObjectName("mainContainer")
         
-        lang_container.setLayout(lang_layout)
-        form_layout.addWidget(lang_container)
+        # Ombre portée
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        shadow.setOffset(0, 0)
+        self.main_container.setGraphicsEffect(shadow)
         
-        # Nom d'utilisateur
-        username_label = QLabel("👤 Nom d'utilisateur")
-        username_label.setStyleSheet("color: #333; font-size: 13px; font-weight: bold; margin-top: 10px;")
-        form_layout.addWidget(username_label)
+        # Layout principal horizontal
+        main_layout = QHBoxLayout(self.main_container)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # --- PARTIE GAUCHE (BRANDING) ---
+        self.left_panel = QFrame()
+        self.left_panel.setObjectName("leftPanel")
+        self.left_panel.setStyleSheet("""
+            QFrame#leftPanel {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
+                    stop:0 #4f46e5, stop:1 #7c3aed);
+                border-top-left-radius: 20px;
+                border-bottom-left-radius: 20px;
+                border: none;
+            }
+        """)
+        left_layout = QVBoxLayout(self.left_panel)
+        left_layout.setContentsMargins(40, 60, 40, 60)
+        
+        # Logo/Icon
+        logo_icon = QLabel()
+        logo_icon.setAlignment(Qt.AlignCenter)
+        
+        # Logo
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignCenter)
+        logo_label.setStyleSheet("background-color: transparent; border: none;")
+        
+        logo_path = str(config.LOGO_PATH)
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_icon.setPixmap(scaled_pixmap)
+        else:
+            logo_icon.setText("📊")
+            logo_icon.setStyleSheet("font-size: 80px; background: transparent; border: none;")
+            
+        left_layout.addWidget(logo_icon)
+        
+        left_layout.addSpacing(20)
+        
+        # Titre App
+        app_title = QLabel("DamDev POS")
+        app_title.setAlignment(Qt.AlignCenter)
+        app_title.setFont(QFont("Segoe UI", 26, QFont.Bold))
+        app_title.setStyleSheet("color: white; background: transparent; border: none;")
+        left_layout.addWidget(app_title)
+        
+        # Slogan
+        slogan = QLabel("La gestion de stock\nsimple et intelligente.")
+        slogan.setAlignment(Qt.AlignCenter)
+        slogan.setStyleSheet("color: rgba(255,255,255,0.8); font-size: 16px; background: transparent; border: none;")
+        left_layout.addWidget(slogan)
+        
+        left_layout.addStretch()
+        
+        # Version
+        version = QLabel(f"v{config.APP_VERSION}")
+        version.setAlignment(Qt.AlignCenter)
+        version.setStyleSheet("color: rgba(255,255,255,0.5); font-size: 12px; background: transparent; border: none;")
+        left_layout.addWidget(version)
+        
+        main_layout.addWidget(self.left_panel, 40) # 40% largeur
+        
+        # --- PARTIE DROITE (FORMULAIRE) ---
+        self.right_panel = QFrame()
+        self.right_panel.setObjectName("rightPanel")
+        self.right_panel.setStyleSheet("""
+            QFrame#rightPanel {
+                background-color: white;
+                border-top-right-radius: 20px;
+                border-bottom-right-radius: 20px;
+                border: none;
+            }
+        """)
+        right_layout = QVBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(50, 40, 50, 40)
+        right_layout.setSpacing(20)
+        
+        # Bouton fermer (Custom)
+        close_btn_layout = QHBoxLayout()
+        close_btn_layout.addStretch()
+        
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setFixedSize(30, 30)
+        self.close_btn.setCursor(Qt.PointingHandCursor)
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #9ca3af;
+                font-weight: bold;
+                font-size: 16px;
+                border: none;
+                border-radius: 15px;
+            }
+            QPushButton:hover {
+                background-color: #fee2e2;
+                color: #ef4444;
+            }
+        """)
+        self.close_btn.clicked.connect(self.reject)
+        close_btn_layout.addWidget(self.close_btn)
+        right_layout.addLayout(close_btn_layout)
+        
+        # Titre Formulaire
+        login_title = QLabel("Bon retour ! 👋")
+        login_title.setFont(QFont("Segoe UI", 22, QFont.Bold))
+        login_title.setStyleSheet("color: #1f2937;")
+        right_layout.addWidget(login_title)
+        
+        login_subtitle = QLabel("Veuillez entrer vos identifiants.")
+        login_subtitle.setStyleSheet("color: #6b7280; font-size: 14px;")
+        right_layout.addWidget(login_subtitle)
+        
+        right_layout.addSpacing(10)
+        
+        # Champ Username
+        user_container = QFrame()
+        user_container.setStyleSheet("""
+            QFrame {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+            }
+            QFrame:hover {
+                border-color: #d1d5db;
+            }
+        """)
+        user_layout = QHBoxLayout(user_container)
+        user_layout.setContentsMargins(15, 5, 15, 5)
+        
+        user_icon = QLabel("👤")
+        user_icon.setStyleSheet("background: transparent; font-size: 16px;")
+        user_layout.addWidget(user_icon)
         
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("Entrez votre nom d'utilisateur")
-        self.username_input.setMinimumHeight(50)
+        self.username_input.setPlaceholderText("Nom d'utilisateur")
+        self.username_input.setMinimumHeight(45)
+        self.username_input.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                font-size: 15px;
+                color: #374151;
+            }
+        """)
         self.username_input.returnPressed.connect(self.on_login)
-        form_layout.addWidget(self.username_input)
+        user_layout.addWidget(self.username_input)
         
-        # Mot de passe
-        password_label = QLabel("🔒 Mot de passe")
-        password_label.setStyleSheet("color: #333; font-size: 13px; font-weight: bold; margin-top: 10px;")
-        form_layout.addWidget(password_label)
+        right_layout.addWidget(user_container)
+        
+        # Champ Password
+        pass_container = QFrame()
+        pass_container.setStyleSheet("""
+            QFrame {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+            }
+            QFrame:hover {
+                border-color: #d1d5db;
+            }
+        """)
+        pass_layout = QHBoxLayout(pass_container)
+        pass_layout.setContentsMargins(15, 5, 15, 5)
+        
+        pass_icon = QLabel("🔒")
+        pass_icon.setStyleSheet("background: transparent; font-size: 16px;")
+        pass_layout.addWidget(pass_icon)
         
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setPlaceholderText("Entrez votre mot de passe")
-        self.password_input.setMinimumHeight(50)
-        self.password_input.returnPressed.connect(self.on_login)
-        form_layout.addWidget(self.password_input)
-        
-        # Espacement
-        form_layout.addSpacing(30)
-        
-        # Boutons avec couleurs appropriées
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(15)
-        
-        self.cancel_button = QPushButton("Quitter")
-        self.cancel_button.setMinimumHeight(55)
-        self.cancel_button.setCursor(Qt.PointingHandCursor)
-        self.cancel_button.clicked.connect(self.reject)
-        
-        self.login_button = QPushButton("Se connecter")
-        self.login_button.setMinimumHeight(55)
-        self.login_button.setCursor(Qt.PointingHandCursor)
-        self.login_button.clicked.connect(self.on_login)
-        self.login_button.setDefault(True)
-        
-        button_layout.addWidget(self.cancel_button)
-        button_layout.addWidget(self.login_button)
-        form_layout.addLayout(button_layout)
-        
-        # Espacement
-        form_layout.addSpacing(20)
-        
-        # Info version - TRÈS VISIBLE
-        version_label = QLabel(f"📱 Version {config.APP_VERSION}")
-        version_label.setAlignment(Qt.AlignCenter)
-        version_label.setMinimumHeight(30)
-        version_label.setStyleSheet("""
-            QLabel {
-                color: #666; 
-                font-size: 13px; 
-                padding: 10px;
-                font-weight: bold;
-                background-color: transparent;
-            }
-        """)
-        form_layout.addWidget(version_label)
-        
-        form_container.setLayout(form_layout)
-        layout.addWidget(form_container)
-        
-        self.setLayout(layout)
-        
-        # Focus sur le champ username
-        self.username_input.setFocus()
-    
-    def apply_style(self):
-        """Appliquer le style CSS"""
-        self.setStyleSheet("""
-            QDialog {
-                background-color: white;
-            }
+        self.password_input.setPlaceholderText("Mot de passe")
+        self.password_input.setMinimumHeight(45)
+        self.password_input.setStyleSheet("""
             QLineEdit {
-                padding: 12px 15px;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                background-color: #fafafa;
-                font-size: 15px;
-                color: #333;
-            }
-            QLineEdit:focus {
-                border: 2px solid #667eea;
-                background-color: white;
-            }
-            QLineEdit::placeholder {
-                color: #999;
-            }
-            QPushButton {
+                background: transparent;
                 border: none;
-                border-radius: 8px;
                 font-size: 15px;
-                font-weight: bold;
-                padding: 12px;
-                color: white;
-            }
-            QPushButton:hover {
-                opacity: 0.9;
-            }
-            QPushButton:pressed {
-                opacity: 0.8;
+                color: #374151;
             }
         """)
+        self.password_input.returnPressed.connect(self.on_login)
+        pass_layout.addWidget(self.password_input)
         
-        # Style pour le bouton Quitter (ROUGE)
-        self.cancel_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 15px;
-                font-weight: bold;
-                padding: 12px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-            QPushButton:pressed {
-                background-color: #a93226;
-            }
-        """)
+        right_layout.addWidget(pass_container)
         
-        # Style pour le bouton Se connecter (VERT)
-        self.login_button.setStyleSheet("""
+        right_layout.addSpacing(10)
+
+        # Error Message Label
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("color: #e74c3c; font-size: 13px;")
+        self.error_label.setAlignment(Qt.AlignCenter)
+        self.error_label.setWordWrap(True)
+        self.error_label.hide()
+        right_layout.addWidget(self.error_label)
+        
+        self.login_btn = QPushButton("Se connecter")
+        self.login_btn.setMinimumHeight(50)
+        self.login_btn.setCursor(Qt.PointingHandCursor)
+        self.login_btn.setDefault(True)  # Répondre à Enter
+        self.login_btn.setAutoDefault(True)
+        self.login_btn.setStyleSheet("""
             QPushButton {
-                background-color: #2ecc71;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #4f46e5, stop:1 #6366f1);
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 15px;
+                border-radius: 12px;
+                font-size: 16px;
                 font-weight: bold;
-                padding: 12px;
             }
             QPushButton:hover {
-                background-color: #27ae60;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #4338ca, stop:1 #4f46e5);
             }
             QPushButton:pressed {
-                background-color: #229954;
+                background-color: #3730a3;
+            }
+            QPushButton:disabled {
+                background-color: #9ca3af;
+                color: #f3f4f6;
             }
         """)
-    
+        self.login_btn.clicked.connect(self.on_login)
+        right_layout.addWidget(self.login_btn)
+        
+        # Default Creds Hint (Subtle)
+        creds_label = QLabel("Admin par défaut: admin / admin123")
+        creds_label.setAlignment(Qt.AlignCenter)
+        creds_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-top: 10px;")
+        right_layout.addWidget(creds_label)
+        
+        right_layout.addStretch()
+        
+        main_layout.addWidget(self.right_panel, 60) # 60% largeur
+        
+    def mousePressEvent(self, event):
+        self.old_pos = event.globalPos()
+
+    def mouseMoveEvent(self, event):
+        delta = QPoint(event.globalPos() - self.old_pos)
+        self.move(self.x() + delta.x(), self.y() + delta.y())
+        self.old_pos = event.globalPos()
+        
+    def keyPressEvent(self, event):
+        """Hide error when typing"""
+        if self.error_label.isVisible():
+            self.error_label.hide()
+        super().keyPressEvent(event)
+        
     def on_login(self):
-        """Gérer la tentative de connexion"""
         username = self.username_input.text().strip()
         password = self.password_input.text()
         
-        # Validation
-        if not username:
-            QMessageBox.warning(
-                self, 
-                "⚠️ Champ requis", 
-                "Veuillez entrer votre nom d'utilisateur",
-                QMessageBox.Ok
-            )
-            self.username_input.setFocus()
+        if not username or not password:
+            self.shake_window()
             return
+
+        self.login_btn.setText("Connexion...")
+        self.login_btn.setEnabled(False)
         
-        if not password:
-            QMessageBox.warning(
-                self, 
-                "⚠️ Champ requis", 
-                "Veuillez entrer votre mot de passe",
-                QMessageBox.Ok
-            )
-            self.password_input.setFocus()
-            return
-        
-        # Désactiver le bouton pendant la connexion
-        self.login_button.setEnabled(False)
-        self.login_button.setText("Connexion en cours...")
-        
-        # Tenter la connexion
-        success, message, user_data = auth_manager.login(username, password)
-        
-        if success:
-            logger.info(f"Connexion réussie: {username}")
-            self.login_successful.emit(user_data)
-            self.accept()
-        else:
-            logger.warning(f"Échec de connexion: {username} - {message}")
+        try:
+            # Simulate slight delay for effect (optional, or just process)
+            # Here we call auth directly
+            success, message, user_data = auth_manager.login(username, password)
             
-            # Message d'erreur stylisé
-            error_box = QMessageBox(self)
-            error_box.setIcon(QMessageBox.Critical)
-            error_box.setWindowTitle("❌ Erreur de connexion")
-            error_box.setText(message)
-            error_box.setInformativeText("Vérifiez vos identifiants et réessayez.")
-            error_box.setStandardButtons(QMessageBox.Ok)
-            error_box.exec_()
+            if success:
+                logger.info(f"Connexion réussie: {username}")
+                self.login_successful.emit(user_data)
+                self.accept()
+            else:
+                self.login_btn.setText("Se connecter")
+                self.login_btn.setEnabled(True)
+                self.shake_window()
+                
+                # Show error message
+                self.error_label.setText(message)
+                self.error_label.show()
+                
+                # Let's clean password
+                self.password_input.clear()
+                self.password_input.setFocus()
+        except Exception as e:
+            logger.error(f"Erreur lors de la connexion: {e}")
+            self.login_btn.setText("Se connecter")
+            self.login_btn.setEnabled(True)
+            self.error_label.setText(f"Erreur système: {e}")
+            self.error_label.show()
             
-            # Réactiver le bouton
-            self.login_button.setEnabled(True)
-            self.login_button.setText("Se connecter")
-            
-            # Effacer le mot de passe et refocus
-            self.password_input.clear()
-            self.password_input.setFocus()
-    
-    def get_selected_language(self):
-        """Obtenir la langue sélectionnée"""
-        return self.language_combo.currentData()
+    def shake_window(self):
+        anim = QPropertyAnimation(self.main_container, b"pos")
+        anim.setDuration(300)
+        anim.setLoopCount(3)
+        current_pos = self.main_container.pos()
+        anim.setKeyValueAt(0, current_pos)
+        anim.setKeyValueAt(0.2, QPoint(current_pos.x() - 10, current_pos.y()))
+        anim.setKeyValueAt(0.5, QPoint(current_pos.x() + 10, current_pos.y()))
+        anim.setKeyValueAt(0.8, QPoint(current_pos.x() - 10, current_pos.y()))
+        anim.setKeyValueAt(1, current_pos)
+        anim.start()
+        self.anim = anim # keep ref

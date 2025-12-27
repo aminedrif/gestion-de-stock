@@ -215,7 +215,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
 CREATE TABLE IF NOT EXISTS sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sale_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
+    product_id INTEGER,  -- NULL pour produits personnalisés/divers
     
     product_name TEXT NOT NULL,  -- Copie du nom (au cas où produit supprimé)
     barcode TEXT,
@@ -494,7 +494,7 @@ ORDER BY total_quantity_sold DESC;
 -- Utilisateur admin par défaut (mot de passe: admin123)
 -- Hash bcrypt de "admin123"
 INSERT OR IGNORE INTO users (username, password_hash, full_name, role, is_active) 
-VALUES ('admin', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqVr/qvIyW', 'Administrateur', 'admin', 1);
+VALUES ('admin', '$2b$12$TKMLy6DsG4mwXmnRuH0e0eNTp.wIovrE5nE/yHa1EMN5Xavax3nEu', 'Administrateur', 'admin', 1);
 
 -- Catégories par défaut
 INSERT OR IGNORE INTO categories (name, name_ar, description) VALUES 

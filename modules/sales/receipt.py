@@ -45,6 +45,12 @@ class ReceiptGenerator:
         lines.append(self.store_config['phone'].center(width))
         if self.store_config.get('tax_id'):
             lines.append(f"NIF: {self.store_config['tax_id']}".center(width))
+        if self.store_config.get('nis'):
+            lines.append(f"NIS: {self.store_config['nis']}".center(width))
+        if self.store_config.get('rc'):
+            lines.append(f"RC: {self.store_config['rc']}".center(width))
+        if self.store_config.get('ai'):
+            lines.append(f"AI: {self.store_config['ai']}".center(width))
         lines.append("=" * width)
         lines.append("")
         
@@ -165,6 +171,15 @@ class ReceiptGenerator:
             
             if self.store_config.get('tax_id'):
                 c.drawCentredString(x_center, y, f"NIF: {self.store_config['tax_id']}")
+                y -= 4 * mm
+            if self.store_config.get('nis'):
+                c.drawCentredString(x_center, y, f"NIS: {self.store_config['nis']}")
+                y -= 4 * mm
+            if self.store_config.get('rc'):
+                c.drawCentredString(x_center, y, f"RC: {self.store_config['rc']}")
+                y -= 4 * mm
+            if self.store_config.get('ai'):
+                c.drawCentredString(x_center, y, f"AI: {self.store_config['ai']}")
                 y -= 4 * mm
             
             # Ligne de séparation

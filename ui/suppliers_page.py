@@ -42,6 +42,8 @@ class SupplierFormDialog(QDialog):
         # Boutons
         btn_layout = QHBoxLayout()
         save_btn = QPushButton("Enregistrer")
+        save_btn.setDefault(True)
+        save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
         cancel_btn = QPushButton("Annuler")
         cancel_btn.clicked.connect(self.reject)
@@ -99,7 +101,7 @@ class DebtPaymentDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout()
         
-        info = QLabel(f"Dette actuelle: {self.supplier['total_debt']} DA")
+        info = QLabel(f"Dette actuelle: {self.supplier['total_debt']:g} DA")
         info.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
         layout.addWidget(info)
         
@@ -153,10 +155,31 @@ class SuppliersPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
-        # En-tête
+        # En-tête avec gradient
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #f59e0b, stop:1 #d97706);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 5px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_frame)
+        
+        title_layout = QVBoxLayout()
         header = QLabel("🏭 Gestion des Fournisseurs")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
-        layout.addWidget(header)
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(header)
+        
+        subtitle = QLabel("Gérez vos fournisseurs et vos dettes")
+        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(subtitle)
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        layout.addWidget(header_frame)
         
         # Toolbar - Améliorée
         toolbar = QHBoxLayout()
@@ -167,14 +190,16 @@ class SuppliersPage(QWidget):
         self.search_input.setMinimumHeight(50)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-size: 15px;
                 background-color: white;
+                color: #1f2937;
             }
             QLineEdit:focus {
-                border-color: #9b59b6;
+                border-color: #f59e0b;
+                background-color: #fffbeb;
             }
         """)
         self.search_input.textChanged.connect(self.load_suppliers)
@@ -186,11 +211,15 @@ class SuppliersPage(QWidget):
         self.filter_combo.addItems(["Tous les fournisseurs", "Avec dettes"])
         self.filter_combo.setStyleSheet("""
             QComboBox {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-size: 14px;
                 background-color: white;
+                color: #374151;
+            }
+            QComboBox::drop-down {
+                border: none;
             }
         """)
         self.filter_combo.currentIndexChanged.connect(self.load_suppliers)
@@ -201,16 +230,18 @@ class SuppliersPage(QWidget):
         new_btn.setCursor(Qt.PointingHandCursor)
         new_btn.setStyleSheet("""
             QPushButton {
-                background-color: #9b59b6;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #f59e0b, stop:1 #d97706);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 12px;
                 padding: 10px 20px;
                 font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #8e44ad;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #d97706, stop:1 #b45309);
             }
         """)
         new_btn.clicked.connect(self.open_new_dialog)
@@ -228,33 +259,38 @@ class SuppliersPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(50)
         self.table.setStyleSheet("""
             QTableWidget {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                gridline-color: transparent;
                 background-color: white;
-                gridline-color: #f0f0f0;
+                selection-background-color: #fffbeb;
+                selection-color: #92400e;
                 font-size: 14px;
-            }
-            QTableWidget::item {
-                padding: 10px;
-            }
-            QTableWidget::item:selected {
-                background-color: #9b59b6;
-                color: white;
             }
             QHeaderView::section {
-                background-color: #f8f9fa;
-                padding: 12px;
+                background-color: #fff7ed;
+                padding: 10px 15px;
                 border: none;
+                border-bottom: 2px solid #fed7aa;
                 font-weight: bold;
-                font-size: 14px;
-                color: #2c3e50;
+                color: #9a3412;
+                font-size: 13px;
+            }
+            QTableWidget::item {
+                padding: 5px 10px;
+                border-bottom: 1px solid #fff7ed;
+            }
+            QTableWidget::item:selected {
+                font-weight: bold;
             }
             QTableWidget::item:alternate {
-                background-color: #f8f9fa;
+                background-color: #fff7ed;
             }
+
         """)
         layout.addWidget(self.table)
         
@@ -285,7 +321,7 @@ class SuppliersPage(QWidget):
             except (ValueError, TypeError):
                 total_purchases = 0.0
                 
-            purchases_item = QTableWidgetItem(f"{total_purchases:.2f} DA")
+            purchases_item = QTableWidgetItem(f"{total_purchases:g} DA")
             purchases_item.setForeground(QColor("#3498db"))
             self.table.setItem(row, 4, purchases_item)
             
@@ -295,7 +331,7 @@ class SuppliersPage(QWidget):
             except (ValueError, TypeError):
                 total_debt = 0.0
                 
-            debt_item = QTableWidgetItem(f"{total_debt:.2f} DA")
+            debt_item = QTableWidgetItem(f"{total_debt:g} DA")
             if total_debt > 0:
                 debt_item.setForeground(QColor("red"))
             self.table.setItem(row, 5, debt_item)
@@ -323,6 +359,13 @@ class SuppliersPage(QWidget):
                 pay_btn.setStyleSheet("color: green;")
                 pay_btn.clicked.connect(lambda checked, x=s: self.open_payment_dialog(x))
                 hbox.addWidget(pay_btn)
+
+            # Bouton Supprimer
+            del_btn = QPushButton("🗑️")
+            del_btn.setToolTip("Supprimer")
+            del_btn.setStyleSheet("color: red;")
+            del_btn.clicked.connect(lambda checked, x=s['id']: self.delete_supplier(x))
+            hbox.addWidget(del_btn)
                 
             self.table.setCellWidget(row, 6, widget)
             
@@ -337,6 +380,20 @@ class SuppliersPage(QWidget):
     def open_payment_dialog(self, supplier):
         if DebtPaymentDialog(supplier, parent=self).exec_():
             self.load_suppliers()
+
+    def delete_supplier(self, supplier_id):
+        """Supprimer un fournisseur"""
+        confirm = QMessageBox.question(self, "Confirmer", 
+                                     "Voulez-vous vraiment supprimer ce fournisseur ?\n(Impossible s'il a des produits ou des dettes)", 
+                                     QMessageBox.Yes | QMessageBox.No)
+        
+        if confirm == QMessageBox.Yes:
+            success, msg = supplier_manager.delete_supplier(supplier_id)
+            if success:
+                # QMessageBox.information(self, "Succès", "Fournisseur supprimé avec succès")
+                self.load_suppliers()
+            else:
+                QMessageBox.warning(self, "Impossible de supprimer", msg)
     
     def open_purchase_dialog(self, supplier):
         """Ouvrir le dialogue d'ajout d'achat"""

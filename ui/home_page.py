@@ -1,348 +1,472 @@
 # -*- coding: utf-8 -*-
 """
-Page d'accueil avec calculatrice et accès rapide
+Page d'accueil - Design Moderne avec Stats et Animations
 """
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QPushButton, QGridLayout, QLineEdit, QFrame, QGroupBox)
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+                             QPushButton, QGridLayout, QLineEdit, QFrame, 
+                             QGraphicsDropShadowEffect, QScrollArea)
+from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QFont, QColor
 from datetime import datetime
 
 
-class HomePage(QWidget):
-    """Page d'accueil avec widgets utiles"""
+class StatCard(QFrame):
+    """Carte de statistique moderne"""
     
-    # Signaux pour la navigation et actions
-    navigate_to = pyqtSignal(str) # page_name
-    quick_scan = pyqtSignal(str) # barcode
+    clicked = pyqtSignal()
+    
+    def __init__(self, icon, title, value, subtitle, color, parent=None):
+        super().__init__(parent)
+        self.color = color
+        self.setup_ui(icon, title, value, subtitle)
+        
+    def setup_ui(self, icon, title, value, subtitle):
+        self.setMinimumSize(200, 140)
+        self.setMaximumHeight(160)
+        self.setCursor(Qt.PointingHandCursor)
+        
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
+                    stop:0 {self.color}, stop:1 {self.color}dd);
+                border-radius: 18px;
+                border: none;
+            }}
+            QFrame:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
+                    stop:0 {self.color}ee, stop:1 {self.color}cc);
+            }}
+        """)
+        
+        # Ombre
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(25)
+        shadow.setColor(QColor(self.color))
+        shadow.setOffset(0, 8)
+        self.setGraphicsEffect(shadow)
+        
+        layout = QVBoxLayout()
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(5)
+        
+        # Ligne 1: Icon + Title
+        top_layout = QHBoxLayout()
+        
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size: 28px; background: transparent;")
+        top_layout.addWidget(icon_label)
+        
+        title_label = QLabel(title)
+        title_label.setStyleSheet("""
+            color: rgba(255,255,255,0.9);
+            font-size: 13px;
+            background: transparent;
+        """)
+        top_layout.addWidget(title_label)
+        top_layout.addStretch()
+        
+        layout.addLayout(top_layout)
+        
+        # Valeur principale
+        self.value_label = QLabel(value)
+        self.value_label.setStyleSheet("""
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        layout.addWidget(self.value_label)
+        
+        # Sous-titre
+        sub_label = QLabel(subtitle)
+        sub_label.setStyleSheet("""
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            background: transparent;
+        """)
+        layout.addWidget(sub_label)
+        
+        self.setLayout(layout)
+    
+    def update_value(self, new_value):
+        self.value_label.setText(new_value)
+
+    def mousePressEvent(self, event):
+        """Handle click event"""
+        self.clicked.emit()
+        super().mousePressEvent(event)
+
+
+class QuickAccessButton(QPushButton):
+    """Bouton d'accès rapide moderne"""
+    
+    def __init__(self, icon, title, subtitle, color, parent=None):
+        super().__init__(parent)
+        self.color = color
+        self.setup_ui(icon, title, subtitle)
+        
+    def setup_ui(self, icon, title, subtitle):
+        self.setMinimumSize(180, 130)
+        self.setCursor(Qt.PointingHandCursor)
+        
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: white;
+                border: 2px solid #f0f0f0;
+                border-radius: 16px;
+                padding: 20px;
+            }}
+            QPushButton:hover {{
+                border-color: {self.color};
+                background-color: #fafafa;
+            }}
+            QPushButton:pressed {{
+                background-color: #f5f5f5;
+            }}
+        """)
+        
+        # Ombre légère
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(15)
+        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+        
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(8)
+        
+        # Icône dans un cercle coloré
+        icon_container = QLabel(icon)
+        icon_container.setFixedSize(50, 50)
+        icon_container.setAlignment(Qt.AlignCenter)
+        icon_container.setStyleSheet(f"""
+            background-color: {self.color}22;
+            border-radius: 25px;
+            font-size: 26px;
+        """)
+        layout.addWidget(icon_container, 0, Qt.AlignCenter)
+        
+        # Titre
+        title_label = QLabel(title)
+        title_label.setStyleSheet(f"""
+            color: #1f2937;
+            font-size: 14px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Sous-titre
+        sub_label = QLabel(subtitle)
+        sub_label.setStyleSheet("""
+            color: #6b7280;
+            font-size: 11px;
+            background: transparent;
+        """)
+        sub_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(sub_label)
+        
+        self.setLayout(layout)
+
+
+class HomePage(QWidget):
+    """Page d'accueil avec design moderne"""
+    
+    navigate_to = pyqtSignal(str)
+    quick_scan = pyqtSignal(str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
+        self.load_stats()
     
     def init_ui(self):
         """Initialiser l'interface"""
-        layout = QVBoxLayout()
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        # Style de fond
+        self.setStyleSheet("background-color: #f8fafc;")
         
-        # En-tête de bienvenue
-        header_layout = QHBoxLayout()
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(25)
+        main_layout.setContentsMargins(30, 25, 30, 25)
         
-        welcome_label = QLabel("🏪 Tableau de Bord")
-        welcome_font = QFont()
-        welcome_font.setPointSize(28)
-        welcome_font.setBold(True)
-        welcome_label.setFont(welcome_font)
-        welcome_label.setStyleSheet("color: #667eea;")
-        header_layout.addWidget(welcome_label)
+        # En-tête
+        header = self.create_header()
+        main_layout.addLayout(header)
         
-        header_layout.addStretch()
+        # Cartes de stats
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(20)
         
-        # Date et heure
+        self.stat_sales = StatCard("💰", "Ventes Aujourd'hui", "0 DA", "Chiffre d'affaires", "#8b5cf6")
+        stats_layout.addWidget(self.stat_sales)
+        
+        self.stat_products = StatCard("📦", "Produits", "0", "En stock", "#3b82f6")
+        stats_layout.addWidget(self.stat_products)
+        
+        self.stat_expiring = StatCard("📅", "Expiration", "0", "Expire bientôt", "#ef4444")
+        self.stat_expiring.clicked.connect(lambda: self.navigate_to.emit("products"))
+        stats_layout.addWidget(self.stat_expiring)
+        
+        self.stat_alerts = StatCard("⚠️", "Alertes", "0", "Stock faible", "#f59e0b")
+        self.stat_alerts.clicked.connect(self.go_to_low_stock)
+        stats_layout.addWidget(self.stat_alerts)
+        
+        main_layout.addLayout(stats_layout)
+        
+        # Zone de scan rapide
+        scan_section = self.create_scan_section()
+        main_layout.addWidget(scan_section)
+        
+        # Accès rapide
+        access_title = QLabel("🚀 Accès Rapide")
+        access_title.setStyleSheet("""
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-top: 10px;
+        """)
+        main_layout.addWidget(access_title)
+        
+        access_layout = QHBoxLayout()
+        access_layout.setSpacing(20)
+        
+        btn_pos = QuickAccessButton("🛒", "Caisse", "Vente rapide", "#8b5cf6")
+        btn_pos.clicked.connect(lambda: self.navigate_to.emit("pos"))
+        access_layout.addWidget(btn_pos)
+        
+        btn_products = QuickAccessButton("📦", "Produits", "Gérer stock", "#3b82f6")
+        btn_products.clicked.connect(lambda: self.navigate_to.emit("products"))
+        access_layout.addWidget(btn_products)
+        
+        btn_customers = QuickAccessButton("👥", "Clients", "Fidélité", "#10b981")
+        btn_customers.clicked.connect(lambda: self.navigate_to.emit("customers"))
+        access_layout.addWidget(btn_customers)
+        
+        btn_suppliers = QuickAccessButton("🏭", "Fournisseurs", "Dettes", "#f59e0b")
+        btn_suppliers.clicked.connect(lambda: self.navigate_to.emit("suppliers"))
+        access_layout.addWidget(btn_suppliers)
+        
+        btn_reports = QuickAccessButton("📊", "Rapports", "Statistiques", "#ef4444")
+        btn_reports.clicked.connect(lambda: self.navigate_to.emit("reports"))
+        access_layout.addWidget(btn_reports)
+        
+        main_layout.addLayout(access_layout)
+        
+        main_layout.addStretch()
+        self.setLayout(main_layout)
+    
+    def create_header(self):
+        """Créer l'en-tête"""
+        layout = QHBoxLayout()
+        
+        # Titre avec salutation
+        left_layout = QVBoxLayout()
+        
+        greeting = self.get_greeting()
+        greeting_label = QLabel(f"{greeting} 👋")
+        greeting_label.setStyleSheet("""
+            font-size: 16px;
+            color: #6b7280;
+        """)
+        left_layout.addWidget(greeting_label)
+        
+        title = QLabel("Tableau de Bord")
+        title.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        title.setStyleSheet("color: #1f2937;")
+        left_layout.addWidget(title)
+        
+        layout.addLayout(left_layout)
+        layout.addStretch()
+        
+        # Date
         now = datetime.now()
-        date_label = QLabel(now.strftime("%A %d %B %Y"))
-        date_label.setStyleSheet("color: #666; font-size: 16px;")
-        header_layout.addWidget(date_label)
-        
-        layout.addLayout(header_layout)
-        
-        # Mini Caisse (Scan rapide)
-        scan_group = QGroupBox("⚡ Scan Rapide & Caisse")
-        scan_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: bold;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding-top: 20px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                color: #e74c3c;
+        date_frame = QFrame()
+        date_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+                padding: 10px 20px;
+                border: 1px solid #e5e7eb;
             }
         """)
-        scan_layout = QHBoxLayout()
+        date_layout = QVBoxLayout(date_frame)
+        date_layout.setContentsMargins(15, 10, 15, 10)
         
+        day_label = QLabel(now.strftime("%A"))
+        day_label.setStyleSheet("color: #8b5cf6; font-weight: bold; font-size: 14px;")
+        day_label.setAlignment(Qt.AlignCenter)
+        date_layout.addWidget(day_label)
+        
+        date_label = QLabel(now.strftime("%d %B %Y"))
+        date_label.setStyleSheet("color: #374151; font-size: 13px;")
+        date_label.setAlignment(Qt.AlignCenter)
+        date_layout.addWidget(date_label)
+        
+        layout.addWidget(date_frame)
+        
+        return layout
+    
+    def get_greeting(self):
+        """Obtenir le message de salutation selon l'heure"""
+        hour = datetime.now().hour
+        if hour < 12:
+            return "Bonjour"
+        elif hour < 18:
+            return "Bon après-midi"
+        else:
+            return "Bonsoir"
+    
+    def create_scan_section(self):
+        """Créer la section de scan rapide"""
+        frame = QFrame()
+        frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #667eea, stop:1 #764ba2);
+                border-radius: 18px;
+            }
+        """)
+        
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(102, 126, 234, 100))
+        shadow.setOffset(0, 10)
+        frame.setGraphicsEffect(shadow)
+        
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(30, 25, 30, 25)
+        layout.setSpacing(20)
+        
+        # Icône
+        icon = QLabel("⚡")
+        icon.setStyleSheet("font-size: 40px; background: transparent;")
+        layout.addWidget(icon)
+        
+        # Texte
+        text_layout = QVBoxLayout()
+        
+        title = QLabel("Scan Rapide")
+        title.setStyleSheet("""
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        text_layout.addWidget(title)
+        
+        subtitle = QLabel("Scannez un produit pour l'ajouter au panier")
+        subtitle.setStyleSheet("""
+            color: rgba(255,255,255,0.8);
+            font-size: 13px;
+            background: transparent;
+        """)
+        text_layout.addWidget(subtitle)
+        
+        layout.addLayout(text_layout)
+        layout.addStretch()
+        
+        # Input de scan
         self.scan_input = QLineEdit()
-        self.scan_input.setPlaceholderText("Scanner un produit ici pour l'ajouter directement au panier...")
+        self.scan_input.setPlaceholderText("Code-barres...")
+        self.scan_input.setMinimumWidth(250)
         self.scan_input.setMinimumHeight(50)
         self.scan_input.setStyleSheet("""
             QLineEdit {
-                border: 2px solid #e74c3c;
-                border-radius: 8px;
-                padding: 10px;
-                font-size: 16px;
-                background-color: #fff;
+                background-color: rgba(255,255,255,0.95);
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 15px;
+                color: #1f2937;
+            }
+            QLineEdit:focus {
+                background-color: white;
+            }
+            QLineEdit::placeholder {
+                color: #9ca3af;
             }
         """)
         self.scan_input.returnPressed.connect(self.handle_scan)
-        scan_layout.addWidget(self.scan_input)
+        layout.addWidget(self.scan_input)
         
+        # Bouton
         scan_btn = QPushButton("🛒 Ajouter")
+        scan_btn.setCursor(Qt.PointingHandCursor)
         scan_btn.setMinimumHeight(50)
         scan_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0 20px;
-                font-weight: bold;
-                font-size: 16px;
-            }
-        """)
-        scan_btn.clicked.connect(self.handle_scan)
-        scan_layout.addWidget(scan_btn)
-        
-        scan_group.setLayout(scan_layout)
-        layout.addWidget(scan_group)
-        
-        # Boutons d'accès rapide
-        quick_access_label = QLabel("🚀 Accès Rapide")
-        quick_access_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #333; margin-top: 10px;")
-        layout.addWidget(quick_access_label)
-        
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(15)
-        
-        # Bouton Caisse
-        btn_pos = self.create_quick_button("🛒", "CAISSE", "Point de vente", "#667eea", "pos")
-        buttons_layout.addWidget(btn_pos)
-        
-        # Bouton Produits
-        btn_products = self.create_quick_button("📦", "PRODUITS", "Gestion stock", "#3498db", "products")
-        buttons_layout.addWidget(btn_products)
-        
-        # Bouton Clients
-        btn_customers = self.create_quick_button("👥", "CLIENTS", "Fidélité", "#2ecc71", "customers")
-        buttons_layout.addWidget(btn_customers)
-        
-        # Bouton Rapports
-        btn_reports = self.create_quick_button("📊", "RAPPORTS", "Statistiques", "#f39c12", "reports")
-        buttons_layout.addWidget(btn_reports)
-        
-        layout.addLayout(buttons_layout)
-        
-        # Section Achat Rapide (remplace calculatrice + mini-caisse)
-        quick_purchase = self.create_quick_purchase()
-        layout.addWidget(quick_purchase)
-        
-        layout.addStretch()
-        self.setLayout(layout)
-    
-    def handle_scan(self):
-        """Gérer le scan rapide"""
-        code = self.scan_input.text().strip()
-        if code:
-            self.quick_scan.emit(code)
-            self.scan_input.clear()
-    
-    def create_quick_purchase(self):
-        """Créer le widget Achat Rapide"""
-        container = QFrame()
-        container.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #667eea, stop:1 #764ba2);
-                border-radius: 15px;
-                border: none;
-            }
-        """)
-        container.setMinimumHeight(200)
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(30, 25, 30, 25)
-        
-        # En-tête
-        header_layout = QHBoxLayout()
-        
-        title = QLabel("⚡ Achat Rapide")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent; border: none;")
-        header_layout.addWidget(title)
-        
-        header_layout.addStretch()
-        
-        # Icône
-        icon_label = QLabel("🛒")
-        icon_label.setStyleSheet("font-size: 36px; background: transparent; border: none;")
-        header_layout.addWidget(icon_label)
-        
-        layout.addLayout(header_layout)
-        
-        # Description
-        desc = QLabel("Scannez un produit ou accédez directement à la caisse pour effectuer une vente rapide")
-        desc.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent; border: none;")
-        desc.setWordWrap(True)
-        layout.addWidget(desc)
-        
-        # Boutons côte à côte
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(15)
-        
-        # Bouton Ouvrir Caisse
-        open_btn = QPushButton("🛒 Ouvrir la Caisse")
-        open_btn.setMinimumHeight(60)
-        open_btn.setCursor(Qt.PointingHandCursor)
-        open_btn.setStyleSheet("""
             QPushButton {
                 background-color: white;
                 color: #667eea;
                 border: none;
                 border-radius: 12px;
-                font-size: 18px;
+                padding: 12px 25px;
+                font-size: 15px;
                 font-weight: bold;
-                padding: 15px 25px;
             }
             QPushButton:hover {
-                background-color: #f0f0f0;
+                background-color: #f8fafc;
             }
         """)
-        open_btn.clicked.connect(lambda: self.navigate_to.emit("pos"))
-        buttons_layout.addWidget(open_btn)
+        scan_btn.clicked.connect(self.handle_scan)
+        layout.addWidget(scan_btn)
         
-        # Bouton Nouvelle Vente
-        new_sale_btn = QPushButton("➕ Nouvelle Vente")
-        new_sale_btn.setMinimumHeight(60)
-        new_sale_btn.setCursor(Qt.PointingHandCursor)
-        new_sale_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.2);
-                color: white;
-                border: 2px solid white;
-                border-radius: 12px;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 15px 25px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255,255,255,0.3);
-            }
-        """)
-        new_sale_btn.clicked.connect(lambda: self.navigate_to.emit("pos"))
-        buttons_layout.addWidget(new_sale_btn)
-        
-        layout.addLayout(buttons_layout)
-        
-        container.setLayout(layout)
-        return container
+        return frame
     
+    def handle_scan(self):
+        """Gérer le scan"""
+        code = self.scan_input.text().strip()
+        if code:
+            self.quick_scan.emit(code)
+            self.scan_input.clear()
     
-    def create_quick_button(self, icon, title, subtitle, color, page_target):
-        """Créer un bouton d'accès rapide - Design amélioré"""
-        button = QPushButton()
-        button.setMinimumSize(220, 120)
-        button.setCursor(Qt.PointingHandCursor)
-        
-        # Layout du bouton
-        btn_layout = QVBoxLayout()
-        btn_layout.setAlignment(Qt.AlignCenter)
-        btn_layout.setSpacing(8)
-        
-        icon_label = QLabel(icon)
-        icon_label.setStyleSheet("font-size: 48px; background: transparent; border: none;")
-        icon_label.setAlignment(Qt.AlignCenter)
-        btn_layout.addWidget(icon_label)
-        
-        title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; background: transparent; color: white; border: none;")
-        title_label.setAlignment(Qt.AlignCenter)
-        btn_layout.addWidget(title_label)
-        
-        subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet("font-size: 12px; background: transparent; color: rgba(255,255,255,0.9); border: none;")
-        subtitle_label.setAlignment(Qt.AlignCenter)
-        btn_layout.addWidget(subtitle_label)
-        
-        button.setLayout(btn_layout)
-        button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {color};
-                border: none;
-                border-radius: 15px;
-                padding: 15px;
-            }}
-            QPushButton:hover {{
-                background-color: {color}dd;
-                transform: scale(1.02);
-            }}
-            QPushButton:pressed {{
-                background-color: {color}bb;
-            }}
-        """)
-        
-        button.clicked.connect(lambda: self.navigate_to.emit(page_target))
-        return button
+    def load_stats(self):
+        """Charger les statistiques"""
+        try:
+            from database.db_manager import db
+            
+            # Produits en stock
+            products = db.fetch_one("SELECT COUNT(*) as count FROM products WHERE is_active = 1")
+            if products:
+                self.stat_products.update_value(str(products['count']))
+            
+            # Produits expirant bientôt (30 jours)
+            from datetime import timedelta
+            future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+            expiring = db.fetch_one(f"""
+                SELECT COUNT(*) as count FROM products 
+                WHERE is_active = 1 AND expiry_date IS NOT NULL 
+                AND expiry_date <= '{future_date}' AND expiry_date >= date('now')
+            """)
+            if expiring:
+                self.stat_expiring.update_value(str(expiring['count']))
+            
+            # Ventes du jour
+            today = datetime.now().strftime("%Y-%m-%d")
+            sales = db.fetch_one(f"""
+                SELECT COALESCE(SUM(total_amount), 0) as total 
+                FROM sales 
+                WHERE DATE(sale_date) = '{today}'
+            """)
+            if sales:
+                self.stat_sales.update_value(f"{float(sales['total']):,.0f} DA")
+            
+            # Alertes stock faible (seuil = 10 par défaut)
+            alerts = db.fetch_one("""
+                SELECT COUNT(*) as count FROM products 
+                WHERE is_active = 1 AND stock_quantity <= 10
+            """)
+            if alerts:
+                self.stat_alerts.update_value(str(alerts['count']))
+                
+        except Exception as e:
+            print(f"Erreur chargement stats: {e}")
     
-    def set_dark_mode(self, is_dark):
-        """Appliquer le mode sombre/clair"""
-        if is_dark:
-            # Mode sombre
-            group_style = """
-                QGroupBox {
-                    background-color: #34495e;
-                    color: #ecf0f1;
-                    border: 1px solid #4a6785;
-                    border-radius: 10px;
-                    padding: 15px;
-                    font-weight: bold;
-                    font-size: 14px;
-                }
-                QGroupBox::title {
-                    color: #ecf0f1;
-                }
-            """
-            input_style = """
-                QLineEdit {
-                    background-color: #34495e;
-                    color: #ecf0f1;
-                    border: 2px solid #4a6785;
-                    border-radius: 8px;
-                    padding: 12px;
-                    font-size: 14px;
-                }
-                QLineEdit:focus {
-                    border-color: #3498db;
-                }
-            """
-        else:
-            # Mode clair
-            group_style = """
-                QGroupBox {
-                    background-color: white;
-                    color: #2c3e50;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 10px;
-                    padding: 15px;
-                    font-weight: bold;
-                    font-size: 14px;
-                }
-                QGroupBox::title {
-                    color: #2c3e50;
-                }
-            """
-            input_style = """
-                QLineEdit {
-                    background-color: white;
-                    color: #2c3e50;
-                    border: 2px solid #e0e0e0;
-                    border-radius: 8px;
-                    padding: 12px;
-                    font-size: 14px;
-                }
-                QLineEdit:focus {
-                    border-color: #3498db;
-                }
-            """
-        
-        # Appliquer aux groupes
-        if hasattr(self, 'scan_group'):
-            self.scan_group.setStyleSheet(group_style)
-        if hasattr(self, 'quick_purchase_group'):
-            self.quick_purchase_group.setStyleSheet(group_style)
-        
-        # Appliquer aux inputs
-        if hasattr(self, 'scan_input'):
-            self.scan_input.setStyleSheet(input_style)
+    def refresh_stats(self):
+        """Rafraîchir les statistiques"""
+        self.load_stats()
 
+    def go_to_low_stock(self):
+        """Naviguer vers la page produits filtrée par stock faible"""
+        self.navigate_to.emit("products_low_stock")

@@ -99,106 +99,129 @@ class POSManager:
         
         return self.current_cart.add_item(product, quantity)
 
+    def complete_sale(self, cashier_id: int, payment_method: str, total_amount: float, customer_id: int = None) -> tuple[bool, str, int]:
         """
-        Finaliser une vente
+        Finaliser la vente
         
         Args:
-            cashier_id: ID du caissier
-            payment_method: Méthode de paiement (cash, card, credit, mixed)
-            amount_paid: Montant payé
+            cashier_id: ID du vendeur
+            payment_method: Méthode de paiement ('cash', 'credit', etc.)
+            total_amount: Montant total
             customer_id: ID du client (optionnel)
             
         Returns:
             (success, message, sale_id)
         """
+        if not self.current_cart.items:
+            return False, "Panier vide", 0
+            
         try:
-            # Vérifier que le panier n'est pas vide
-            if self.current_cart.is_empty():
-                return False, "Le panier est vide", None
+            # 1. Générer code de vente
+            sale_code = f"SLE-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            sale_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Calculer les montants
-            subtotal = self.current_cart.get_subtotal()
-            discount_amount = self.current_cart.get_discount_amount()
-            total_amount = self.current_cart.get_total()
+            # 2. Insérer la vente
+            # Use schema column names: sale_number (not code), cashier_id (not user_id)
             
-            # Vérifier le paiement
-            if amount_paid is None:
-                amount_paid = total_amount
+            sale_query = """
+                INSERT INTO sales (sale_number, cashier_id, customer_id, subtotal, total_amount, payment_method, sale_date, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+            """
+            subtotal = total_amount  # For simplicity, subtotal = total (no tax/discount breakdown here)
+            sale_id = db.execute_insert(sale_query, (
+                sale_code, cashier_id, customer_id, subtotal, total_amount, payment_method, sale_date
+            ))
             
-            if payment_method != 'credit' and amount_paid < total_amount:
-                return False, f"Montant insuffisant. Total: {total_amount} DA", None
-            
-            change_amount = max(0, amount_paid - total_amount)
-            
-            # Générer le numéro de vente
-            sale_number = self._generate_sale_number()
-            
-            # Démarrer une transaction
-            db.begin_transaction()
-            
-            try:
-                # Insérer la vente
-                sale_query = """
-                    INSERT INTO sales (
-                        sale_number, customer_id, cashier_id, subtotal,
-                        discount_amount, total_amount, payment_method,
-                        amount_paid, change_amount, register_number
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """
+            if not sale_id:
+                return False, "Erreur lors de la création de la vente", 0
                 
-                sale_id = db.execute_insert(sale_query, (
-                    sale_number, customer_id, cashier_id, subtotal,
-                    discount_amount, total_amount, payment_method,
-                    amount_paid, change_amount, self.register_number
-                ))
+            # 3. Insérer les articles de vente et mettre à jour le stock
+            for item in self.current_cart.items:
+                product_id = item.product_id
+                # Utiliser NULL pour les produits personnalisés (évite FOREIGN KEY error)
+                db_product_id = product_id if product_id > 0 else None
+                product_name = item.product_name
+                barcode = item.barcode
+                quantity = item.quantity
+                unit_price = item.unit_price  # Prix de vente unitaire
+                purchase_price = item.purchase_price
+                subtotal = item.get_subtotal()  # Calculé via méthode
+                discount_percentage = item.discount_percentage
                 
-                # Insérer les articles de la vente
+                # Insertion article avec tous les champs requis
                 item_query = """
-                    INSERT INTO sale_items (
-                        sale_id, product_id, product_name, barcode,
-                        quantity, unit_price, discount_percentage,
-                        subtotal, purchase_price
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sale_items (sale_id, product_id, product_name, barcode, quantity, unit_price, discount_percentage, subtotal, purchase_price)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
+                db.execute_insert(item_query, (sale_id, db_product_id, product_name, barcode, quantity, unit_price, discount_percentage, subtotal, purchase_price))
                 
-                for item in self.current_cart.items:
-                    db.execute_insert(item_query, (
-                        sale_id, item.product_id, item.product_name, item.barcode,
-                        item.quantity, item.unit_price, item.discount_percentage,
-                        item.get_subtotal(), item.purchase_price
-                    ))
-                    
-                    # Décrémenter le stock si configuré
-                    if config.STOCK_CONFIG['auto_decrease_stock']:
-                        product_manager.decrease_stock(item.product_id, item.quantity)
+                # Mise à jour stock
+                if product_id > 0: # Si ce n'est pas un produit divers
+                    # check stock
+                    current_stock_query = "SELECT stock_quantity FROM products WHERE id = ?"
+                    res = db.fetch_one(current_stock_query, (product_id,))
+                    if res:
+                        new_stock = res['stock_quantity'] - quantity
+                        update_stock = "UPDATE products SET stock_quantity = ? WHERE id = ?"
+                        db.execute_update(update_stock, (new_stock, product_id))
+            
+            # 4. Gérer le crédit client si nécessaire
+            if payment_method == 'credit' and customer_id:
+                # Mettre à jour la dette du client
+                # On suppose qu'il y a une colonne current_credit ou on ajoute une transaction
+                # Vérifions si on doit mettre à jour le solde directement
+                update_credit_query = "UPDATE customers SET current_credit = current_credit + ? WHERE id = ?"
+                db.execute_update(update_credit_query, (total_amount, customer_id))
                 
-                # Si paiement à crédit, mettre à jour le crédit client
-                if payment_method == 'credit' and customer_id:
-                    self._update_customer_credit(customer_id, total_amount, sale_id)
-                
-                # Mettre à jour les statistiques client
-                if customer_id:
-                    self._update_customer_stats(customer_id, total_amount)
-                
-                # Valider la transaction
-                db.commit()
-                
-                logger.log_sale(sale_id, total_amount, cashier_id)
-                
-                # Réinitialiser le panier
-                self.new_sale()
-                
-                return True, f"Vente enregistrée: {sale_number}", sale_id
-                
-            except Exception as e:
-                db.rollback()
-                raise e
-                
+                # Enregistrer la transaction de crédit
+                credit_trans_query = """
+                    INSERT INTO customer_credit_transactions (customer_id, transaction_type, amount, transaction_date, notes, processed_by)
+                    VALUES (?, 'credit_sale', ?, ?, ?, ?)
+                """
+                db.execute_insert(credit_trans_query, (
+                    customer_id, total_amount, sale_date, f"Achat {sale_code}", cashier_id
+                ))
+
+            # 5. Vider le panier
+            self.new_sale()
+            
+            logger.info(f"Vente finalisée: {sale_code} (ID: {sale_id})")
+            return True, f"Vente réussie: {sale_code}", sale_id
+            
         except Exception as e:
-            error_msg = f"Erreur lors de la finalisation de la vente: {str(e)}"
-            logger.error(error_msg)
-            return False, error_msg, None
-    
+            logger.error(f"Erreur lors de la finalisation de la vente: {e}")
+            return False, f"Erreur système: {str(e)}", 0
+
+    def get_sale(self, sale_id: int) -> Optional[Dict]:
+        """Récupérer détails d'une vente pour reçu"""
+        try:
+            query = """
+                SELECT s.*, u.username as cashier_name, c.full_name as customer_name
+                FROM sales s
+                LEFT JOIN users u ON s.user_id = u.id
+                LEFT JOIN customers c ON s.customer_id = c.id
+                WHERE s.id = ?
+            """
+            sale = db.fetch_one(query, (sale_id,))
+            if not sale: return None
+            
+            # Récupérer items
+            items_query = """
+                SELECT si.*, p.name as product_name, p.barcode
+                FROM sale_items si
+                LEFT JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id = ?
+            """
+            items = db.execute_query(items_query, (sale_id,))
+            
+            result = dict(sale)
+            result['items'] = [dict(i) for i in items]
+            return result
+        except Exception as e:
+            logger.error(f"Erreur get_sale: {e}")
+            return None
+
+
     def cancel_sale(self, sale_id: int, reason: str = "") -> tuple[bool, str]:
         """
         Annuler une vente

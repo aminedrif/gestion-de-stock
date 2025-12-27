@@ -10,6 +10,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QBrush
 from modules.products.product_manager import product_manager
+from modules.suppliers.supplier_manager import supplier_manager
+from modules.reports.reorder_report import generate_reorder_report
 from core.logger import logger
 
 class ProductFormDialog(QDialog):
@@ -20,6 +22,7 @@ class ProductFormDialog(QDialog):
         self.product = product
         self.setWindowTitle("Nouveau Produit" if not product else "Modifier Produit")
         self.setMinimumWidth(500)
+        self.suppliers = supplier_manager.get_all_suppliers()
         self.setup_ui()
         
     def setup_ui(self):
@@ -36,11 +39,17 @@ class ProductFormDialog(QDialog):
         self.name_edit = QLineEdit()
         self.name_ar_edit = QLineEdit()
         self.category_combo = QComboBox() # TODO: Charger les catégories
+        self.supplier_combo = QComboBox()
+        self.supplier_combo.addItem("--- Aucun ---", None)
+        for s in self.suppliers:
+            self.supplier_combo.addItem(s['company_name'], s['id'])
+            
         self.description_edit = QLineEdit()
         
         form_layout.addRow("Code-barres:", self.barcode_edit)
         form_layout.addRow("Nom *:", self.name_edit)
         form_layout.addRow("Nom (Arabe):", self.name_ar_edit)
+        form_layout.addRow("Fournisseur:", self.supplier_combo)
         form_layout.addRow("Description:", self.description_edit)
         # form_layout.addRow("Catégorie:", self.category_combo)
         
@@ -54,10 +63,12 @@ class ProductFormDialog(QDialog):
         self.purchase_price_spin = QDoubleSpinBox()
         self.purchase_price_spin.setRange(0, 1000000)
         self.purchase_price_spin.setSuffix(" DA")
+        self.purchase_price_spin.setDecimals(2)
         
         self.selling_price_spin = QDoubleSpinBox()
         self.selling_price_spin.setRange(0, 1000000)
         self.selling_price_spin.setSuffix(" DA")
+        self.selling_price_spin.setDecimals(2)
         
         self.stock_spin = QSpinBox()
         self.stock_spin.setRange(0, 100000)
@@ -87,6 +98,8 @@ class ProductFormDialog(QDialog):
         # Boutons
         buttons_layout = QHBoxLayout()
         save_btn = QPushButton("💾 Enregistrer")
+        save_btn.setDefault(True)
+        save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("background-color: #2ecc71; color: white;")
         
@@ -110,6 +123,13 @@ class ProductFormDialog(QDialog):
             self.stock_spin.setValue(self.product.get('stock_quantity', 0))
             self.min_stock_spin.setValue(self.product.get('min_stock_level', 10))
             
+            # Select Supplier
+            supplier_id = self.product.get('supplier_id')
+            if supplier_id:
+                index = self.supplier_combo.findData(supplier_id)
+                if index >= 0:
+                    self.supplier_combo.setCurrentIndex(index)
+            
             if self.product.get('expiry_date'):
                 self.enable_expiry.setChecked(True)
                 self.expiry_date_edit.setDate(QDate.fromString(self.product['expiry_date'], "yyyy-MM-dd"))
@@ -128,7 +148,8 @@ class ProductFormDialog(QDialog):
             'selling_price': self.selling_price_spin.value(),
             'stock_quantity': self.stock_spin.value(),
             'min_stock_level': self.min_stock_spin.value(),
-            'expiry_date': self.expiry_date_edit.date().toString("yyyy-MM-dd") if self.enable_expiry.isChecked() else None
+            'expiry_date': self.expiry_date_edit.date().toString("yyyy-MM-dd") if self.enable_expiry.isChecked() else None,
+            'supplier_id': self.supplier_combo.currentData()
         }
         
         if self.product:
@@ -153,10 +174,43 @@ class ProductsPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
-        # En-tête
+        # En-tête avec gradient
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #3b82f6, stop:1 #2563eb);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 5px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_frame)
+        
+        title_layout = QVBoxLayout()
         header = QLabel("📦 Gestion des Produits")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
-        layout.addWidget(header)
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(header)
+        
+        subtitle = QLabel("Gérez votre stock, prix et promotions")
+        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(subtitle)
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        
+        # Stat rapide dans le header
+        self.count_label = QLabel("0 Produits")
+        self.count_label.setStyleSheet("""
+            background-color: rgba(255,255,255,0.2);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+        """)
+        header_layout.addWidget(self.count_label)
+        
+        layout.addWidget(header_frame)
         
         # Barre d'outils - Améliorée
         toolbar = QHBoxLayout()
@@ -168,14 +222,16 @@ class ProductsPage(QWidget):
         self.search_input.setMinimumHeight(50)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-size: 15px;
                 background-color: white;
+                color: #1f2937;
             }
             QLineEdit:focus {
-                border-color: #3498db;
+                border-color: #3b82f6;
+                background-color: #eff6ff;
             }
         """)
         self.search_input.textChanged.connect(self.load_products)
@@ -188,11 +244,15 @@ class ProductsPage(QWidget):
         self.filter_combo.addItems(["Tous les produits", "Stock faible", "En promotion", "Expire bientôt"])
         self.filter_combo.setStyleSheet("""
             QComboBox {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-size: 14px;
                 background-color: white;
+                color: #374151;
+            }
+            QComboBox::drop-down {
+                border: none;
             }
         """)
         self.filter_combo.currentIndexChanged.connect(self.load_products)
@@ -204,16 +264,18 @@ class ProductsPage(QWidget):
         new_btn.setCursor(Qt.PointingHandCursor)
         new_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #3b82f6, stop:1 #2563eb);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 12px;
                 padding: 10px 20px;
                 font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #2563eb, stop:1 #1d4ed8);
             }
         """)
         new_btn.clicked.connect(self.open_new_product_dialog)
@@ -225,20 +287,46 @@ class ProductsPage(QWidget):
         import_btn.setCursor(Qt.PointingHandCursor)
         import_btn.setStyleSheet("""
             QPushButton {
-                background-color: #8e44ad;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #8b5cf6, stop:1 #7c3aed);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 12px;
                 padding: 10px 20px;
                 font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #7d3c98;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #7c3aed, stop:1 #6d28d9);
             }
         """)
         import_btn.clicked.connect(self.open_import_dialog)
         toolbar.addWidget(import_btn)
+
+        # Bouton Commande Fournisseur - Nouveau
+        order_btn = QPushButton("📑 Commande")
+        order_btn.setMinimumHeight(50)
+        order_btn.setCursor(Qt.PointingHandCursor)
+        order_btn.setToolTip("Générer une liste de commande pour le stock faible")
+        order_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #f59e0b, stop:1 #d97706);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #d97706, stop:1 #b45309);
+            }
+        """)
+        order_btn.clicked.connect(self.generate_order_report)
+        toolbar.addWidget(order_btn)
         
         layout.addLayout(toolbar)
         
@@ -252,32 +340,35 @@ class ProductsPage(QWidget):
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.verticalHeader().setDefaultSectionSize(50)
         self.table.setStyleSheet("""
             QTableWidget {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                gridline-color: transparent;
                 background-color: white;
-                gridline-color: #f0f0f0;
+                selection-background-color: #eff6ff;
+                selection-color: #1e3a8a;
                 font-size: 14px;
-            }
-            QTableWidget::item {
-                padding: 10px;
-            }
-            QTableWidget::item:selected {
-                background-color: #3498db;
-                color: white;
             }
             QHeaderView::section {
-                background-color: #f8f9fa;
-                padding: 12px;
+                background-color: #f8fafc;
+                padding: 10px 15px;
                 border: none;
+                border-bottom: 2px solid #e2e8f0;
                 font-weight: bold;
-                font-size: 14px;
-                color: #2c3e50;
+                color: #475569;
+                font-size: 13px;
+            }
+            QTableWidget::item {
+                padding: 5px 10px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            QTableWidget::item:selected {
+                font-weight: bold;
             }
             QTableWidget::item:alternate {
-                background-color: #f8f9fa;
+                background-color: #f8fafc;
             }
         """)
         layout.addWidget(self.table)
@@ -312,10 +403,10 @@ class ProductsPage(QWidget):
             items = [
                 p.get('barcode', ''),
                 p['name'],
-                f"{p['selling_price']} DA",
+                f"{float(p['selling_price']):g} DA",
                 str(p['stock_quantity']),
                 p.get('expiry_date', '-'),
-                f"{p.get('discount_percentage', 0)}%" if p.get('is_on_promotion') else "-"
+                f"{p.get('discount_percentage', 0):g}%" if p.get('is_on_promotion') else "-"
             ]
             
             for i, text in enumerate(items):
@@ -566,4 +657,10 @@ class ProductsPage(QWidget):
     def refresh(self):
         """Rafraîchir les données"""
         self.load_products()
+
+    def generate_order_report(self):
+        """Générer le rapport de commande"""
+        success, msg = generate_reorder_report()
+        if not success:
+            QMessageBox.warning(self, "Attention", msg)
 

@@ -20,18 +20,22 @@ class BackupManager:
         self.backup_dir.mkdir(exist_ok=True)
     
     def create_backup(self, destination: Optional[Path] = None, 
-                     compress: bool = True) -> tuple[bool, str, Optional[Path]]:
+                     compress: Optional[bool] = None) -> tuple[bool, str, Optional[Path]]:
         """
         Créer une sauvegarde de la base de données
         
         Args:
             destination: Dossier de destination (None = dossier par défaut)
-            compress: Compresser en ZIP
+            compress: Compresser en ZIP (None = utiliser la config)
             
         Returns:
             (success, message, backup_path)
         """
         try:
+            # Utiliser la configuration si compress n'est pas spécifié
+            if compress is None:
+                compress = config.BACKUP_CONFIG.get('compress_backups', False)
+
             # Générer le nom du fichier de sauvegarde
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_name = f"minimarket_backup_{timestamp}"
@@ -215,8 +219,7 @@ class BackupManager:
         
         # Créer la sauvegarde
         success, message, backup_path = self.create_backup(
-            destination=usb_backup_dir,
-            compress=True
+            destination=usb_backup_dir
         )
         
         if success:

@@ -273,18 +273,38 @@ class POSPage(QWidget):
         panel.setStyleSheet("""
             QFrame#leftPanel {
                 background-color: white;
-                border-radius: 10px;
-                padding: 15px;
+                border-radius: 16px;
+                border: 1px solid #e5e7eb;
             }
         """)
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
-        # En-tête
-        header = QLabel("🛒 Point de Vente")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #667eea;")
-        layout.addWidget(header)
+        # En-tête avec TOTAL et Remise (grand)
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #8b5cf6, stop:1 #6366f1);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 10px;
+            }
+        """)
+        header_layout_inner = QVBoxLayout(header_frame)
+        
+        # Label TOTAL (très grand)
+        self.header_total_label = QLabel("TOTAL: 0.00 DA")
+        self.header_total_label.setStyleSheet("font-size: 38px; font-weight: bold; color: white; background: transparent;")
+        header_layout_inner.addWidget(self.header_total_label)
+        
+        # Label Remise (sous le total)
+        self.header_discount_label = QLabel("Remise: 0.00 DA")
+        self.header_discount_label.setStyleSheet("font-size: 16px; color: #fbbf24; background: transparent;")
+        header_layout_inner.addWidget(self.header_discount_label)
+        
+        layout.addWidget(header_frame)
         
         # Scanner code-barres
         scanner_group = QGroupBox("Scanner Code-Barres")
@@ -292,13 +312,16 @@ class POSPage(QWidget):
             QGroupBox {
                 font-size: 14px;
                 font-weight: bold;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
                 margin-top: 10px;
-                padding-top: 15px;
+                padding: 20px 15px 15px 15px;
+                background-color: #fafafa;
             }
             QGroupBox::title {
-                color: #667eea;
+                color: #8b5cf6;
+                subcontrol-position: top left;
+                padding: 5px 10px;
             }
         """)
         scanner_layout = QVBoxLayout()
@@ -308,16 +331,19 @@ class POSPage(QWidget):
         self.barcode_input.setMinimumHeight(50)
         self.barcode_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px 15px;
-                border: 2px solid #667eea;
-                border-radius: 8px;
+                padding: 12px 18px;
+                border: 2px solid #8b5cf6;
+                border-radius: 10px;
                 font-size: 16px;
-                background-color: #f0f4ff;
-                color: #333;
+                background-color: white;
+                color: #1f2937;
             }
             QLineEdit:focus {
-                border-color: #764ba2;
-                background-color: white;
+                border-color: #6366f1;
+                background-color: #faf5ff;
+            }
+            QLineEdit::placeholder {
+                color: #9ca3af;
             }
         """)
         self.barcode_input.returnPressed.connect(self.scan_product)
@@ -543,12 +569,10 @@ class POSPage(QWidget):
         self.customer_combo = QComboBox()
         self.customer_combo.setMinimumHeight(50)
         self.customer_combo.setEditable(True)  # Permet la recherche au clavier
-        self.customer_combo.lineEdit().setPlaceholderText("🔍 Rechercher un client (Nom, Tél)...")
-        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)  # Ne pas ajouter de nouveaux items
-        self.customer_combo.addItem("👤 Client de passage", None)
-        self.customer_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
-        self.customer_combo.completer().setFilterMode(Qt.MatchContains)  # Recherche partielle
+        self.customer_combo.lineEdit().setPlaceholderText("🔍 Rechercher un client (optionnel)...")
+        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
         self.load_customers()
+        self.customer_combo.setCurrentIndex(-1)  # Aucune sélection = champ vide
         self.customer_combo.setStyleSheet("""
             QComboBox {
                 padding: 10px 15px;
@@ -556,10 +580,13 @@ class POSPage(QWidget):
                 border-radius: 8px;
                 font-size: 15px;
                 color: #333;
+                background-color: white;
             }
             QComboBox QAbstractItemView {
                 color: #333;
                 font-size: 14px;
+                background-color: white;
+                selection-background-color: #ede9fe;
             }
             QComboBox::drop-down {
                 width: 40px;
@@ -570,7 +597,7 @@ class POSPage(QWidget):
         # Bouton Vider sélection
         self.clear_customer_btn = QPushButton("❌")
         self.clear_customer_btn.setFixedSize(50, 50)
-        self.clear_customer_btn.setToolTip("Réinitialiser (Client de passage)")
+        self.clear_customer_btn.setToolTip("Réinitialiser (Aucun client)")
         self.clear_customer_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e0e0e0;
@@ -584,7 +611,7 @@ class POSPage(QWidget):
                 color: #e74c3c;
             }
         """)
-        self.clear_customer_btn.clicked.connect(lambda: self.customer_combo.setCurrentIndex(0))
+        self.clear_customer_btn.clicked.connect(self.clear_customer_selection)
         customer_layout.addWidget(self.clear_customer_btn)
         
         customer_group.setLayout(customer_layout)
@@ -592,7 +619,7 @@ class POSPage(QWidget):
         
         # Panier
         cart_label = QLabel("🛒 Panier")
-        cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #2ecc71;")
+        cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6; margin-top: 10px;")
         layout.addWidget(cart_label)
         
         self.cart_table = QTableWidget()
@@ -602,46 +629,30 @@ class POSPage(QWidget):
         self.cart_table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Read-only
         self.cart_table.setStyleSheet("""
             QTableWidget {
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                gridline-color: #f0f0f0;
-                color: #333;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                gridline-color: #f3f4f6;
+                color: #1f2937;
                 background-color: white;
+                selection-background-color: #ede9fe;
             }
             QHeaderView::section {
-                background-color: #f8f9fa;
-                padding: 8px;
+                background-color: #f5f3ff;
+                padding: 10px;
                 font-weight: bold;
-                color: #333;
+                color: #6b21a8;
+                border: none;
+                border-bottom: 2px solid #e5e7eb;
+            }
+            QTableWidget::item {
+                padding: 8px;
             }
         """)
         layout.addWidget(self.cart_table)
         
         # Totaux
-        self.totals_frame = QFrame()
-        self.totals_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border-radius: 8px;
-                padding: 15px;
-            }
-        """)
-        totals_layout = QVBoxLayout()
-        
-        self.subtotal_label = QLabel("Sous-total: 0.00 DA")
-        self.subtotal_label.setStyleSheet("font-size: 16px; color: #666;")
-        totals_layout.addWidget(self.subtotal_label)
-        
-        self.discount_label = QLabel("Remise: 0.00 DA")
-        self.discount_label.setStyleSheet("font-size: 16px; color: #e67e22;")
-        totals_layout.addWidget(self.discount_label)
-        
-        self.total_label = QLabel("TOTAL: 0.00 DA")
-        self.total_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2ecc71;")
-        totals_layout.addWidget(self.total_label)
-        
-        self.totals_frame.setLayout(totals_layout)
-        layout.addWidget(self.totals_frame)
+        # Totaux supprimés du panneau droit pour laisser plus de place au panier
+        # (Déplacés vers le header gauche)
         
         # Paiement
         payment_group = QGroupBox("💳 Paiement")
@@ -694,18 +705,20 @@ class POSPage(QWidget):
         pay_btn.setMinimumHeight(80)
         pay_btn.setStyleSheet("""
             QPushButton {
-                background-color: #2ecc71;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #10b981, stop:1 #059669);
                 color: white;
                 border: none;
-                border-radius: 12px;
+                border-radius: 14px;
                 font-size: 24px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #27ae60;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #059669, stop:1 #047857);
             }
             QPushButton:pressed {
-                background-color: #229954;
+                background: #047857;
             }
         """)
         pay_btn.clicked.connect(self.process_payment)
@@ -1088,19 +1101,21 @@ class POSPage(QWidget):
             remove_btn.clicked.connect(lambda checked, pid=item.product_id: self.remove_from_cart(pid))
             self.cart_table.setCellWidget(row, 4, remove_btn)
         
-        # Mettre à jour les totaux
-        subtotal = self.cart.get_subtotal()
+        # Mettre à jour les totaux (dans le header gauche)
         discount = self.cart.get_discount_amount()
         total = self.cart.get_total()
         
-        self.subtotal_label.setText(f"Sous-total: {subtotal:.2f} DA")
-        self.discount_label.setText(f"Remise: {discount:.2f} DA")
-        self.total_label.setText(f"TOTAL: {total:.2f} DA")
+        self.header_discount_label.setText(f"Remise: {discount:.2f} DA")
+        self.header_total_label.setText(f"TOTAL: {total:.2f} DA")
     
     def remove_from_cart(self, product_id):
         """Retirer un produit du panier"""
         self.cart.remove_item(product_id)
         self.update_cart_display()
+    
+    def clear_customer_selection(self):
+        """Réinitialiser la sélection client"""
+        self.customer_combo.setCurrentIndex(-1)  # Vider le champ = aucun client
     
     def clear_cart(self):
         """Vider le panier"""
@@ -1251,7 +1266,7 @@ class POSPage(QWidget):
                 self.update_cart_display()
                 
                 # Réinitialiser champs
-                self.customer_combo.setCurrentIndex(0)
+                self.customer_combo.setCurrentIndex(-1)  # Vider le champ client
                 self.payment_method.setCurrentIndex(0)
                 
                 # Afficher l'aperçu du ticket SEULEMENT si checkbox cochée
@@ -1276,6 +1291,7 @@ class POSPage(QWidget):
         """Rafraîchir les données de la page"""
         self.customer_combo.clear()
         self.load_customers()
+        self.customer_combo.setCurrentIndex(-1)  # Toujours vide par défaut
         self.barcode_input.setFocus()
 
     def calc_add_digit(self, digit):

@@ -76,9 +76,73 @@ class DatabaseManager:
             conn.executescript(schema_sql)
             conn.commit()
             print("✓ Base de données initialisée avec succès")
+            
+            # Run migrations for existing databases
+            self._run_migrations(conn)
         except sqlite3.Error as e:
             print(f"✗ Erreur lors de l'initialisation de la base de données: {e}")
             raise
+    
+    def _run_migrations(self, conn):
+        """Run migrations for existing databases to add missing columns"""
+        try:
+            cursor = conn.cursor()
+            
+            # Check and add total_purchases to suppliers if missing
+            cursor.execute("PRAGMA table_info(suppliers)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'total_purchases' not in columns:
+                cursor.execute("ALTER TABLE suppliers ADD COLUMN total_purchases REAL DEFAULT 0.0")
+                print("✓ Migration: Ajout colonne total_purchases à suppliers")
+                
+            if 'total_debt' not in columns:
+                cursor.execute("ALTER TABLE suppliers ADD COLUMN total_debt REAL DEFAULT 0.0")
+                print("✓ Migration: Ajout colonne total_debt à suppliers")
+                
+            # Check and add total_purchases to customers if missing
+            cursor.execute("PRAGMA table_info(customers)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'total_purchases' not in columns:
+                cursor.execute("ALTER TABLE customers ADD COLUMN total_purchases REAL DEFAULT 0.0")
+                print("✓ Migration: Ajout colonne total_purchases à customers")
+            
+            # Create user_permissions table if not exists
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_permissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    permission_key TEXT NOT NULL,
+                    is_granted INTEGER DEFAULT 1,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE(user_id, permission_key)
+                )
+            """)
+            print("✓ Migration: Vérification table user_permissions")
+
+            # Check and add supplier_id to products if missing
+            cursor.execute("PRAGMA table_info(products)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'supplier_id' not in columns:
+                cursor.execute("ALTER TABLE products ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL")
+                print("✓ Migration: Ajout colonne supplier_id à products")
+            
+            # Create license table if not exists
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS license (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    license_key TEXT NOT NULL,
+                    machine_id TEXT,
+                    activation_date TEXT
+                )
+            """)
+            print("✓ Migration: Verification table license")
+            
+            conn.commit()
+        except sqlite3.Error as e:
+            print(f"⚠ Migration warning: {e}")
     
     def execute_query(self, query: str, params: tuple = ()) -> List[sqlite3.Row]:
         """

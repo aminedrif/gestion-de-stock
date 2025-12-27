@@ -56,12 +56,12 @@ class PrinterManager:
         
         Args:
             sale_data: Données de la vente
-            method: Méthode d'impression ('thermal', 'pdf', 'standard')
+            method: Méthode d'impression ('thermal', 'pdf', 'standard', 'direct')
             
         Returns:
             (success, message)
         """
-        method = method or self.printer_config.get('default_printer', 'PDF')
+        method = method or self.printer_config.get('default_printer', 'DIRECT')
         method = method.upper()
         
         if method == 'THERMAL':
@@ -70,6 +70,8 @@ class PrinterManager:
             return self._print_pdf(sale_data)
         elif method == 'STANDARD':
             return self._print_standard(sale_data)
+        elif method == 'DIRECT':
+            return self._print_direct(sale_data)
         else:
             return False, f"Méthode d'impression inconnue: {method}"
     
@@ -185,6 +187,47 @@ class PrinterManager:
                 
         except Exception as e:
             error_msg = f"Erreur lors de l'impression standard: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+    
+    def _print_direct(self, sale_data: Dict) -> tuple[bool, str]:
+        """
+        Imprimer DIRECTEMENT sur l'imprimante par défaut (sans dialogue)
+        
+        Args:
+            sale_data: Données de la vente
+            
+        Returns:
+            (success, message)
+        """
+        try:
+            from PyQt5.QtPrintSupport import QPrinter, QPrinterInfo
+            from PyQt5.QtGui import QTextDocument
+            from PyQt5.QtWidgets import QApplication
+            
+            # Générer le HTML
+            html = receipt_generator.generate_html_receipt(sale_data)
+            
+            # Créer un document
+            document = QTextDocument()
+            document.setHtml(html)
+            
+            # Obtenir l'imprimante par défaut
+            default_printer = QPrinterInfo.defaultPrinter()
+            if default_printer.isNull():
+                return False, "Aucune imprimante par défaut configurée"
+            
+            # Configurer l'imprimante
+            printer = QPrinter(default_printer, QPrinter.HighResolution)
+            
+            # Imprimer directement
+            document.print_(printer)
+            
+            logger.info(f"Ticket imprimé directement: {sale_data['sale_number']}")
+            return True, "Ticket imprimé avec succès"
+                
+        except Exception as e:
+            error_msg = f"Erreur lors de l'impression directe: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
     

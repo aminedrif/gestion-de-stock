@@ -44,6 +44,8 @@ class CustomerFormDialog(QDialog):
         # Boutons
         btn_layout = QHBoxLayout()
         save_btn = QPushButton("Enregistrer")
+        save_btn.setDefault(True)
+        save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
         cancel_btn = QPushButton("Annuler")
         cancel_btn.clicked.connect(self.reject)
@@ -101,7 +103,7 @@ class PaymentDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout()
         
-        info = QLabel(f"Crédit actuel: {self.customer['current_credit']:.2f} DA")
+        info = QLabel(f"Crédit actuel: {self.customer['current_credit']:g} DA")
         info.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
         layout.addWidget(info)
         
@@ -120,7 +122,7 @@ class PaymentDialog(QDialog):
         layout.addLayout(form)
         
         # Nouveau solde
-        self.remaining_label = QLabel(f"Nouveau solde: {(self.customer['current_credit'] - self.amount_spin.value()):.2f} DA")
+        self.remaining_label = QLabel(f"Nouveau solde: {(self.customer['current_credit'] - self.amount_spin.value()):g} DA")
         self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
         layout.addWidget(self.remaining_label)
         
@@ -134,7 +136,7 @@ class PaymentDialog(QDialog):
     def update_remaining(self):
         """Mettre à jour le solde restant"""
         remaining = self.customer['current_credit'] - self.amount_spin.value()
-        self.remaining_label.setText(f"Nouveau solde: {remaining:.2f} DA")
+        self.remaining_label.setText(f"Nouveau solde: {remaining:g} DA")
         if remaining < 0:
              self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
         else:
@@ -170,10 +172,31 @@ class CustomersPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
-        # En-tête
+        # En-tête avec gradient
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #10b981, stop:1 #059669);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 5px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_frame)
+        
+        title_layout = QVBoxLayout()
         header = QLabel("👥 Gestion des Clients")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
-        layout.addWidget(header)
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(header)
+        
+        subtitle = QLabel("Gérez vos clients et leur crédit")
+        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(subtitle)
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        layout.addWidget(header_frame)
         
         # Toolbar - Améliorée
         toolbar = QHBoxLayout()
@@ -184,14 +207,16 @@ class CustomersPage(QWidget):
         self.search_input.setMinimumHeight(50)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-size: 15px;
                 background-color: white;
+                color: #1f2937;
             }
             QLineEdit:focus {
-                border-color: #2ecc71;
+                border-color: #10b981;
+                background-color: #ecfdf5;
             }
         """)
         self.search_input.textChanged.connect(self.load_customers)
@@ -203,11 +228,15 @@ class CustomersPage(QWidget):
         self.filter_combo.addItems(["Tous les clients", "Avec dettes (Crédit > 0)", "Meilleurs clients"])
         self.filter_combo.setStyleSheet("""
             QComboBox {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-size: 14px;
                 background-color: white;
+                color: #374151;
+            }
+            QComboBox::drop-down {
+                border: none;
             }
         """)
         self.filter_combo.currentIndexChanged.connect(self.load_customers)
@@ -218,16 +247,18 @@ class CustomersPage(QWidget):
         new_btn.setCursor(Qt.PointingHandCursor)
         new_btn.setStyleSheet("""
             QPushButton {
-                background-color: #2ecc71;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #10b981, stop:1 #059669);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 12px;
                 padding: 10px 20px;
                 font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #27ae60;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #059669, stop:1 #047857);
             }
         """)
         new_btn.clicked.connect(self.open_new_dialog)
@@ -242,34 +273,38 @@ class CustomersPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.verticalHeader().setDefaultSectionSize(50)
         self.table.setStyleSheet("""
             QTableWidget {
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                gridline-color: transparent;
                 background-color: white;
-                gridline-color: #f0f0f0;
+                selection-background-color: #ecfdf5;
+                selection-color: #064e3b;
                 font-size: 14px;
-            }
-            QTableWidget::item {
-                padding: 10px;
-            }
-            QTableWidget::item:selected {
-                background-color: #2ecc71;
-                color: white;
             }
             QHeaderView::section {
-                background-color: #f8f9fa;
-                padding: 12px;
+                background-color: #f0fdf4;
+                padding: 10px 15px;
                 border: none;
+                border-bottom: 2px solid #bbf7d0;
                 font-weight: bold;
-                font-size: 14px;
-                color: #2c3e50;
+                color: #166534;
+                font-size: 13px;
+            }
+            QTableWidget::item {
+                padding: 5px 10px;
+                border-bottom: 1px solid #f0fdf4;
+            }
+            QTableWidget::item:selected {
+                font-weight: bold;
             }
             QTableWidget::item:alternate {
-                background-color: #f8f9fa;
+                background-color: #f0fdf4;
             }
         """)
+
         layout.addWidget(self.table)
         
         self.setLayout(layout)
@@ -306,12 +341,12 @@ class CustomersPage(QWidget):
             except (ValueError, TypeError):
                 total_purchases = 0.0
 
-            credit_item = QTableWidgetItem(f"{current_credit:.2f} DA")
+            credit_item = QTableWidgetItem(f"{current_credit:g} DA")
             if current_credit > 0:
                 credit_item.setForeground(QColor("red"))
             self.table.setItem(row, 3, credit_item)
             
-            self.table.setItem(row, 4, QTableWidgetItem(f"{total_purchases:.2f} DA"))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{total_purchases:g} DA"))
             
             # Actions
             widget = QWidget()
@@ -323,12 +358,11 @@ class CustomersPage(QWidget):
             edit_btn.clicked.connect(lambda checked, x=c: self.open_edit_dialog(x))
             hbox.addWidget(edit_btn)
             
-            if current_credit > 0:
-                pay_btn = QPushButton("💰")
-                pay_btn.setToolTip("Régler Dette")
-                pay_btn.setStyleSheet("color: green;")
-                pay_btn.clicked.connect(lambda checked, x=c: self.open_payment_dialog(x))
-                hbox.addWidget(pay_btn)
+            pay_btn = QPushButton("💰")
+            pay_btn.setToolTip("Régler Dette")
+            pay_btn.setStyleSheet("color: green;")
+            pay_btn.clicked.connect(lambda checked, x=c: self.open_payment_dialog(x))
+            hbox.addWidget(pay_btn)
             
             # Delete button
             del_btn = QPushButton("🗑️")

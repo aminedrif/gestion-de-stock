@@ -124,9 +124,68 @@ class AuthManager:
         if not self.is_authenticated():
             return False
         
+        user_id = self.current_user['id']
         role = self.current_user['role']
+        
+        # 1. Check dynamic permissions (overrides)
+        # Note: We query DB every time, effectively. In production, caching this in self.current_user would be better.
+        # But for this simple app, it ensures real-time updates.
+        query = "SELECT is_granted FROM user_permissions WHERE user_id = ? AND permission_key = ?"
+        result = db.fetch_one(query, (user_id, permission))
+        
+        if result:
+            return bool(result['is_granted'])
+        
+        # 2. Fallback to role-based default permissions
         return permission in config.PERMISSIONS.get(role, [])
     
+    def get_user_permissions(self, user_id: int) -> Dict[str, bool]:
+        """
+        Obtenir les permissions spécifiques d'un utilisateur
+        
+        Returns:
+            Dict[permission_key, is_granted]
+        """
+        query = "SELECT permission_key, is_granted FROM user_permissions WHERE user_id = ?"
+        results = db.execute_query(query, (user_id,))
+        return {row['permission_key']: bool(row['is_granted']) for row in results}
+
+    def update_user_permissions(self, user_id: int, permissions: Dict[str, bool]) -> bool:
+        """
+        Mettre à jour les permissions d'un utilisateur
+        
+        Args:
+            user_id: ID utilisateur
+            permissions: Dict {permission_key: is_granted}
+            
+        Returns:
+            True si succès
+        """
+        try:
+            for key, is_granted in permissions.items():
+                # Upsert permission
+                # Check exist
+                check = db.fetch_one("SELECT id FROM user_permissions WHERE user_id = ? AND permission_key = ?", (user_id, key))
+                val = 1 if is_granted else 0
+                
+                if check:
+                    db.execute_update(
+                        "UPDATE user_permissions SET is_granted = ? WHERE user_id = ? AND permission_key = ?",
+                        (val, user_id, key)
+                    )
+                else:
+                    db.execute_insert(
+                        "INSERT INTO user_permissions (user_id, permission_key, is_granted) VALUES (?, ?, ?)",
+                        (user_id, key, val)
+                    )
+            
+            self._log_action('update_permissions', self.current_user['id'] if self.current_user else 0, 
+                           entity_type='user', entity_id=user_id)
+            return True
+        except Exception as e:
+            print(f"Erreur update permissions: {e}")
+            return False
+
     def is_admin(self) -> bool:
         """Vérifier si l'utilisateur est admin"""
         return (self.is_authenticated() and 

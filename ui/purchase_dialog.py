@@ -56,6 +56,8 @@ class PurchaseDialog(QDialog):
         # Boutons
         btn_layout = QVBoxLayout()
         save_btn = QPushButton("✅ Enregistrer l'Achat")
+        save_btn.setDefault(True)
+        save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("background-color: #3498db; color: white; padding: 10px; font-weight: bold;")
         btn_layout.addWidget(save_btn)

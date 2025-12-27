@@ -3,13 +3,21 @@
 Configuration globale de l'application Mini-Market
 """
 import os
+import sys
 from pathlib import Path
 
-# Chemins de base
-BASE_DIR = Path(__file__).parent
+# Chemins de base - Gestion du mode exécutable PyInstaller
+if getattr(sys, 'frozen', False):
+    # L'application est exécutée comme un bundle (.exe)
+    BASE_DIR = Path(sys.executable).parent
+else:
+    # L'application est exécutée normalement (script Python)
+    BASE_DIR = Path(__file__).parent
+
 DATA_DIR = BASE_DIR / "data"
 LOGS_DIR = BASE_DIR / "logs"
 RESOURCES_DIR = BASE_DIR / "resources"
+LOGO_PATH = RESOURCES_DIR / "images" / "logo_final.png"
 BACKUP_DIR = DATA_DIR / "backups"
 
 # Créer les dossiers s'ils n'existent pas
@@ -20,9 +28,9 @@ for directory in [DATA_DIR, LOGS_DIR, RESOURCES_DIR, BACKUP_DIR]:
 DATABASE_PATH = DATA_DIR / "minimarket.db"
 
 # Paramètres de l'application
-APP_NAME = "Gestion Supérette AKHRIB"
+APP_NAME = "DamDev POS"
 APP_VERSION = "1.0.0"
-COMPANY_NAME = "Supérette AKHRIB"
+COMPANY_NAME = "DamDev Solutions"
 
 # Paramètres du magasin (modifiables via interface)
 STORE_CONFIG = {
@@ -65,8 +73,9 @@ PRINTER_CONFIG = {
 BACKUP_CONFIG = {
     "auto_backup": True,
     "backup_time": "23:00",  # Heure de sauvegarde automatique
+    "backup_interval_hours": 5, # Intervalle en heures
     "keep_backups_days": 30,  # Garder les sauvegardes pendant 30 jours
-    "compress_backups": True,
+    "compress_backups": False,
 }
 
 # Paramètres multi-langue

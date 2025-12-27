@@ -5,14 +5,16 @@ Interface des paramètres
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QLineEdit, QTableWidget, QTableWidgetItem,
                              QComboBox, QFrame, QMessageBox, QHeaderView, QTabWidget,
-                             QFormLayout, QGroupBox, QCheckBox, QFileDialog)
+                             QFormLayout, QGroupBox, QCheckBox, QSpinBox, QFileDialog)
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QFont, QColor, QPixmap
 from core.auth import auth_manager
 from core.logger import logger
 from database.db_manager import db
 import config
 import openpyxl
+import os
+from ui.permission_dialog import PermissionDialog
 
 class SettingsPage(QWidget):
     """Page de configuration"""
@@ -28,13 +30,60 @@ class SettingsPage(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         
-        # Titre
-        header = QLabel("⚙️ Paramètres")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;")
-        layout.addWidget(header)
+        # En-tête avec gradient
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #475569, stop:1 #334155);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_frame)
         
-        # Onglets
+        title_layout = QVBoxLayout()
+        header = QLabel("⚙️ Paramètres")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(header)
+        
+        subtitle = QLabel("Configuration générale, utilisateurs et sauvegardes")
+        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(subtitle)
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        layout.addWidget(header_frame)
+        
+        # Onglets stylisés
         tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #e2e8f0;
+                background: white;
+                border-radius: 12px;
+                top: -1px; 
+            }
+            QTabBar::tab {
+                background: #f1f5f9;
+                border: 1px solid #e2e8f0;
+                padding: 12px 20px;
+                margin-right: 5px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                color: #64748b;
+                font-weight: bold;
+            }
+            QTabBar::tab:selected {
+                background: white;
+                border-bottom-color: white;
+                color: #0f172a;
+            }
+            QTabBar::tab:hover {
+                background: #e2e8f0;
+            }
+        """)
         
         is_admin = auth_manager.is_admin()
         
@@ -42,10 +91,6 @@ class SettingsPage(QWidget):
             # Onglet Utilisateurs
             self.users_tab = self.create_users_tab()
             tabs.addTab(self.users_tab, "👥 Utilisateurs")
-            
-            # Apparence déplacée dans la sidebar
-            # self.appearance_tab = self.create_appearance_tab()
-            # tabs.addTab(self.appearance_tab, "🎨 Apparence")
             
             # Onglet Données (Export)
             self.data_tab = self.create_data_tab()
@@ -70,6 +115,45 @@ class SettingsPage(QWidget):
         """Onglet de gestion des données"""
         tab = QWidget()
         layout = QVBoxLayout()
+        
+        # Section Configuration Sauvegarde Auto
+        backup_config_group = QGroupBox("⚙️ Configuration Sauvegarde Automatique")
+        backup_form = QFormLayout()
+        
+        self.auto_backup_check = QCheckBox("Activer la sauvegarde automatique")
+        self.auto_backup_check.setChecked(True) # Valeur par défaut, sera écrasée par la DB
+        
+        self.backup_interval_spin = QSpinBox()
+        self.backup_interval_spin.setRange(1, 48)
+        self.backup_interval_spin.setSuffix(" heures")
+        self.backup_interval_spin.setValue(config.BACKUP_CONFIG.get("backup_interval_hours", 5))
+        
+        # Charger les valeurs depuis la DB
+        try:
+            # Check enabled
+            res_enabled = db.fetch_one("SELECT setting_value FROM settings WHERE setting_key = 'auto_backup_enabled'")
+            if res_enabled:
+                self.auto_backup_check.setChecked(res_enabled['setting_value'] == '1')
+            else:
+                self.auto_backup_check.setChecked(config.BACKUP_CONFIG.get("auto_backup", True))
+                
+            # Check interval
+            res_interval = db.fetch_one("SELECT setting_value FROM settings WHERE setting_key = 'backup_interval_hours'")
+            if res_interval:
+                self.backup_interval_spin.setValue(int(res_interval['setting_value']))
+        except Exception as e:
+            logger.error(f"Erreur chargement config backup: {e}")
+            
+        backup_form.addRow(self.auto_backup_check)
+        backup_form.addRow("Intervalle:", self.backup_interval_spin)
+        
+        save_backup_btn = QPushButton("💾 Enregistrer la configuration")
+        save_backup_btn.clicked.connect(self.save_backup_config)
+        save_backup_btn.setStyleSheet("background-color: #34495e; color: white;")
+        backup_form.addRow(save_backup_btn)
+        
+        backup_config_group.setLayout(backup_form)
+        layout.addWidget(backup_config_group)
         
         # Section Export
         export_group = QGroupBox("📤 Sauvegarde / Exportation")
@@ -148,6 +232,23 @@ class SettingsPage(QWidget):
         layout.addStretch()
         tab.setLayout(layout)
         return tab
+
+    def save_backup_config(self):
+        """Enregistrer la configuration de sauvegarde"""
+        try:
+            enabled = '1' if self.auto_backup_check.isChecked() else '0'
+            interval = str(self.backup_interval_spin.value())
+            
+            # Upsert settings
+            db.execute_update("INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES ('auto_backup_enabled', ?)", (enabled,))
+            db.execute_update("INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES ('backup_interval_hours', ?)", (interval,))
+            
+            QMessageBox.information(self, "Succès", "Configuration de sauvegarde enregistrée.\nRedémarrez l'application pour appliquer les changements.")
+            logger.info(f"Config backup mise à jour: Enabled={enabled}, Interval={interval}h")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur lors de l'enregistrement: {e}")
+            logger.error(f"Erreur save backup config: {e}")
 
     def export_data(self):
         """Exporter les données en Excel (sauvegarde complète)"""
@@ -415,15 +516,11 @@ class SettingsPage(QWidget):
         tab = QWidget()
         layout = QVBoxLayout()
         
-        group = QGroupBox("Thème")
-        g_layout = QVBoxLayout()
+        # Message indiquant que le thème est fixe
+        info_label = QLabel("✅ L'application utilise le thème clair par défaut.")
+        info_label.setStyleSheet("font-size: 14px; color: #7f8c8d; padding: 20px;")
+        layout.addWidget(info_label)
         
-        self.dark_mode_cb = QCheckBox("🌙 Activer le mode sombre")
-        self.dark_mode_cb.clicked.connect(self.toggle_dark_mode)
-        g_layout.addWidget(self.dark_mode_cb)
-        
-        group.setLayout(g_layout)
-        layout.addWidget(group)
         layout.addStretch()
         
         tab.setLayout(layout)
@@ -434,20 +531,77 @@ class SettingsPage(QWidget):
         tab = QWidget()
         layout = QFormLayout()
         
-        self.store_name = QLineEdit("Mini-Market")
-        self.store_phone = QLineEdit()
-        self.store_address = QLineEdit()
+        # Charger config actuelle
+        store_config = config.STORE_CONFIG
+        
+        self.store_name = QLineEdit(store_config.get('name', ''))
+        self.store_phone = QLineEdit(store_config.get('phone', ''))
+        self.store_address = QLineEdit(store_config.get('address', ''))
+        self.store_city = QLineEdit(store_config.get('city', ''))
+        
+        # Champs fiscaux
+        self.store_nif = QLineEdit(store_config.get('tax_id', ''))  # NIF
+        self.store_nis = QLineEdit(store_config.get('nis', ''))      # NIS
+        self.store_rc = QLineEdit(store_config.get('rc', ''))        # RC
+        self.store_ai = QLineEdit(store_config.get('ai', ''))        # AI
         
         save_btn = QPushButton("💾 Sauvegarder")
-        save_btn.clicked.connect(lambda: QMessageBox.information(self, "Info", "Paramètres sauvegardés (simulé)"))
+        save_btn.setDefault(True)
+        save_btn.setAutoDefault(True)
+        save_btn.clicked.connect(self.save_store_settings)
         
         layout.addRow("Nom du magasin:", self.store_name)
         layout.addRow("Téléphone:", self.store_phone)
         layout.addRow("Adresse:", self.store_address)
+        layout.addRow("Ville:", self.store_city)
+        layout.addRow("NIF:", self.store_nif)
+        layout.addRow("NIS:", self.store_nis)
+        layout.addRow("RC:", self.store_rc)
+        layout.addRow("AI:", self.store_ai)
         layout.addRow(save_btn)
         
         tab.setLayout(layout)
         return tab
+
+    def save_store_settings(self):
+        """Sauvegarder les paramètres du magasin"""
+        try:
+            # Mettre à jour la config en mémoire
+            config.STORE_CONFIG['name'] = self.store_name.text()
+            config.STORE_CONFIG['phone'] = self.store_phone.text()
+            config.STORE_CONFIG['address'] = self.store_address.text()
+            config.STORE_CONFIG['city'] = self.store_city.text()
+            config.STORE_CONFIG['tax_id'] = self.store_nif.text()
+            config.STORE_CONFIG['nis'] = self.store_nis.text()
+            config.STORE_CONFIG['rc'] = self.store_rc.text()
+            config.STORE_CONFIG['ai'] = self.store_ai.text()
+            
+            # Sauvegarder en base de données
+            # Table settings avec (setting_key, setting_value)
+            settings_to_save = {
+                'store_name': config.STORE_CONFIG['name'],
+                'store_phone': config.STORE_CONFIG['phone'],
+                'store_address': config.STORE_CONFIG['address'],
+                'store_city': config.STORE_CONFIG['city'],
+                'store_nif': config.STORE_CONFIG['tax_id'],
+                'store_nis': config.STORE_CONFIG['nis'],
+                'store_rc': config.STORE_CONFIG['rc'],
+                'store_ai': config.STORE_CONFIG['ai']
+            }
+            
+            for key, value in settings_to_save.items():
+                # Vérifier si existe
+                check = db.fetch_one("SELECT id FROM settings WHERE setting_key = ?", (key,))
+                if check:
+                    db.execute_update("UPDATE settings SET setting_value = ? WHERE setting_key = ?", (value, key))
+                else:
+                    db.execute_update("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)", (key, value))
+            
+            QMessageBox.information(self, "Succès", "Paramètres du magasin mis à jour!")
+            
+        except Exception as e:
+            logger.error(f"Erreur sauvegarde store settings: {e}")
+            QMessageBox.critical(self, "Erreur", f"Échec de sauvegarde: {e}")
         
     def load_users(self):
         """Charger la liste des utilisateurs"""
@@ -487,6 +641,23 @@ class SettingsPage(QWidget):
                 """)
                 pwd_btn.clicked.connect(lambda checked, uid=user['id'], uname=user['username']: self.change_password_dialog(uid, uname))
                 
+                # Bouton Permissions (Nouveau)
+                perm_btn = QPushButton("🛡️")
+                perm_btn.setFixedSize(30, 30)
+                perm_btn.setToolTip("Gérer les permissions")
+                perm_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #e3f2fd; 
+                        border: none; 
+                        border-radius: 4px;
+                        color: #1976d2;
+                    }
+                    QPushButton:hover {
+                        background-color: #bbdefb;
+                    }
+                """)
+                perm_btn.clicked.connect(lambda checked, uid=user['id'], uname=user['username'], urole=user['role']: self.open_permission_dialog(uid, uname, urole))
+
                 del_btn = QPushButton("🗑️")
                 del_btn.setFixedSize(30, 30)
                 del_btn.setToolTip("Supprimer l'utilisateur")
@@ -505,12 +676,18 @@ class SettingsPage(QWidget):
                 del_btn.clicked.connect(lambda checked, uid=user['id'], uname=user['username']: self.delete_user(uid, uname))
                 
                 layout.addWidget(pwd_btn)
+                layout.addWidget(perm_btn)
                 layout.addWidget(del_btn)
                 self.users_table.setCellWidget(row, 3, btn_widget)
                 
         except Exception as e:
             logger.error(f"Erreur chargement utilisateurs: {e}")
 
+    def open_permission_dialog(self, user_id, username, role):
+        """Ouvrir le dialogue de permissions"""
+        dialog = PermissionDialog(user_id, username, role, self)
+        dialog.exec_()
+        
     def change_password_dialog(self, user_id, username):
         """Ouvrir le dialogue pour changer le mot de passe"""
         from PyQt5.QtWidgets import QDialog, QFormLayout
@@ -551,6 +728,8 @@ class SettingsPage(QWidget):
         cancel_btn.clicked.connect(dialog.reject)
         
         save_btn = QPushButton("💾 Enregistrer")
+        save_btn.setDefault(True)
+        save_btn.setAutoDefault(True)
         save_btn.setStyleSheet("background-color: #27ae60; color: white;")
         
         def save_password():
@@ -718,13 +897,21 @@ class SettingsPage(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         
         # Logo/Icône
-        logo = QLabel("🏪")
-        logo.setStyleSheet("font-size: 72px;")
+        logo = QLabel()
         logo.setAlignment(Qt.AlignCenter)
+        logo_path = str(config.LOGO_PATH)
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo.setPixmap(scaled_pixmap)
+        else:
+            logo.setText("🏪")
+            logo.setStyleSheet("font-size: 72px;")
+            
         layout.addWidget(logo)
         
         # Titre
-        title = QLabel("Gestion Supérette AKHRIB")
+        title = QLabel("DamDev POS")
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #667eea;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
@@ -742,7 +929,7 @@ class SettingsPage(QWidget):
         dev_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
         dev_layout = QVBoxLayout()
         
-        dev_name = QLabel("Amine Drif")
+        dev_name = QLabel("DamDev")
         dev_name.setStyleSheet("font-size: 20px; font-weight: bold; color: #667eea;")
         dev_name.setAlignment(Qt.AlignCenter)
         dev_layout.addWidget(dev_name)
